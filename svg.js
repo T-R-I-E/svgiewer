@@ -1,13 +1,28 @@
 const TWIST = 48
 const BODY  = 49
 const el = document.getElementById.bind(document)
+
 const vp = el('viewport')
-el('up'   ).addEventListener('click', e => vp.currentTranslate.y -= 30)
-el('down' ).addEventListener('click', e => vp.currentTranslate.y += 30)
-el('left' ).addEventListener('click', e => vp.currentTranslate.x -= 30)
-el('right').addEventListener('click', e => vp.currentTranslate.x += 30)
-el('in' ).addEventListener('click', e => vp.currentScale *= 1.1)
-el('out').addEventListener('click', e => vp.currentScale /= 1.1)
+vp.addEventListener('wheel', e => {
+    if(e.deltaY < 0)
+        vp.currentScale *= 1.04
+    else
+        vp.currentScale /= 1.04
+})
+let track=false, panner = e => {
+    vp.currentTranslate.x += e.movementX * 3
+    vp.currentTranslate.y += e.movementY * 3
+}
+vp.addEventListener('mousedown', e => {
+    track = true
+    vp.addEventListener('mousemove', panner)
+})
+vp.addEventListener('mouseup', e => {
+    if(track) {
+        vp.removeEventListener('mousemove', panner)
+        track = false
+    }
+})
 
 let showpipe = pipe( wrap('name', import_file, 'buff')
                 //    , buff_to_uints
@@ -60,7 +75,6 @@ function buff_to_rough(env) {
     env.atoms = []
     env.dupes = []
     env.index = {}
-    // env.index = new Map
     env.shapes = {}
     env.errors = []
 
@@ -165,7 +179,7 @@ function stack_lines(env) {
 function position_atoms(env) {
     for(let i = env.shapes[TWIST].length-1; i >= 0; i--) { // focus is first
         let a = env.shapes[TWIST][i]
-        a.cx = 5 + a.findex * 5
+        a.cx = 5 + a.findex * 7
         a.cy = 400 - env.lines[a.first.hash].yi * 10
         a.colour = a.first.hash.slice(2, 8)
     }
@@ -184,9 +198,9 @@ function position_atoms(env) {
 
 
 function render_svg(env) {
-    let svgs = '', edges = []
+    let svgs = '', edgestr = '', edges = []
     env.shapes[TWIST].forEach(a => {
-        svgs += `<circle cx="${a.cx}" cy="${a.cy}" r="1.5" fill="#${a.colour}" id="${a.hash}" />`
+        svgs += `<circle cx="${a.cx}" cy="${a.cy}" r="2.5" fill="#${a.colour}" id="${a.hash}" />`
         if(a.prev)
             edges.push([a, a.prev])
         if(a.teth)
@@ -194,9 +208,9 @@ function render_svg(env) {
     })
     edges.forEach(e => {
         let fx = e[0].cx, fy = e[0].cy, tx = e[1].cx, ty = e[1].cy
-        svgs += `<path d="M ${fx} ${fy} ${tx} ${ty}" fill="none" stroke="#456"/>`
+        edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" fill="none" stroke="#456"/>`
     })
-    vp.innerHTML = '<g id="gtag">' + svgs + '</g>'
+    vp.innerHTML = '<g id="gtag">' + edgestr + svgs + '</g>'
     return env
 }
 
