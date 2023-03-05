@@ -10,7 +10,7 @@ el('in' ).addEventListener('click', e => vp.currentScale *= 1.1)
 el('out').addEventListener('click', e => vp.currentScale /= 1.1)
 
 let showpipe = pipe( wrap('name', import_file, 'buff')
-                   , buff_to_uints
+                //    , buff_to_uints
                    , buff_to_rough
                    , untwist_bodies
                    , twist_list
@@ -65,7 +65,7 @@ function buff_to_rough(env) {
     while(i < lb) {
         // read hash
         let afirst = i
-        let hash = pluck_hash(env.uints, i)
+        let hash = pluck_hash(b, i)
         if(!hash) {
             env.errors.push({afirst, message: "Improper atom"})
             return env // stop trying to process buff
@@ -74,7 +74,7 @@ function buff_to_rough(env) {
         let pfirst = i
 
         // read shape
-        let shape = pluck_hex(env.uints, i++, 1)
+        let shape = pluck_hex(b, i++, 1)
 
         // read length
         let length = pluck_length(b, i)
@@ -99,9 +99,9 @@ function buff_to_rough(env) {
 
 function untwist_bodies(env) {
     env.shapes[BODY].forEach(a => {
-        let p = pluck_hash(env.uints, a.bin.cfirst)
+        let p = pluck_hash(env.buff, a.bin.cfirst)
         a.prev = env.index[p] || 0
-        let t = pluck_hash(env.uints, a.bin.cfirst + (p ? p.length/2 : 1))
+        let t = pluck_hash(env.buff, a.bin.cfirst + (p ? p.length/2 : 1))
         a.teth = env.index[t] || 0
     })
     return env
@@ -109,7 +109,7 @@ function untwist_bodies(env) {
 
 function twist_list(env) {
     env.shapes[TWIST].forEach(a => {
-        let b = pluck_hash(env.uints, a.bin.cfirst)
+        let b = pluck_hash(env.buff, a.bin.cfirst)
         a.body = env.index[b] || 0
         if(!a.body)
             return 0
@@ -211,19 +211,19 @@ function hexes_helper() {
     return Array.from(Array(256)).map((n,i)=>i.toString(16).padStart(2, '0'))
 }
 
-function pluck_hex(uints, s, l) {     // requires hexes helper
-    let hex = '', end = s+l
-    for(i=s; i<end; i++)
+function pluck_hex(b, s, l) {     // requires hexes helper
+    let hex = '', uints = new Uint8Array(b, s, l)
+    for(i=0; i<l; i++)
         hex += hexes[uints[i]]
     return hex
     // return [...new Uint8Array(b, s, l)].map(n => hexes[n]).join('')
 }
 
-function pluck_hash(uints, s) {
-    let ha = pluck_hex(uints, s, 1)
+function pluck_hash(b, s) {
+    let ha = pluck_hex(b, s, 1)
     let l = ({ 41: 32 })[ha]
     if (!l) return 0
-    return ha + pluck_hex(uints, s + 1, l)
+    return ha + pluck_hex(b, s + 1, l)
 }
 
 function pluck_length(b, s) {
