@@ -74,7 +74,6 @@ function buff_to_rough(env) {
         }
         i += hash.length/2
         let pfirst = i
-        let subhash = hash.slice(0,16)
 
         // read shape
         let shape = pluck_hex(b, i++, 1)
@@ -84,18 +83,13 @@ function buff_to_rough(env) {
         i += 4 + length
 
         // set values
-        let atom = {shape, hash, subhash, bin: {length, afirst, pfirst, cfirst: pfirst+5, last: i-1}}
-        if(env.index[subhash]) {
-        // if(env.index[hash]) { // OPT: profiler says this is slow (200ms) when there's 1M atoms
-        // if(env.index.get(hash)) { // OPT: but it's 500ms with this map... :/
-        // OPT: TODO: try murmurhashing or something? maybe ints will have better lookups than 66 char strings (or base 200? 20000?)
+        let atom = {shape, hash, bin: {length, afirst, pfirst, cfirst: pfirst+5, last: i-1}}
+        if(env.index[hash]) { // OPT: profiler says this is slow (300ms) when there's 1M atoms... but it's 500ms w/ Map :/
             env.dupes.push(atom)
             continue
         }
         env.atoms.push(atom)
-        env.index[subhash] = atom
-        // env.index[hash] = atom
-        // env.index.set(hash, atom)
+        env.index[hash] = atom
         if(!env.shapes[shape])
             env.shapes[shape] = [atom]
         else
@@ -108,13 +102,9 @@ function buff_to_rough(env) {
 function untwist_bodies(env) {
     env.shapes[BODY].forEach(a => {
         let p = pluck_hash(env.buff, a.bin.cfirst)
-        a.prev = p ? env.index[p.slice(0,16)] || 0 : 0
-        // a.prev = env.index[p] || 0
-        // a.prev = env.index.get(p) || 0
+        a.prev = env.index[p] || 0
         let t = pluck_hash(env.buff, a.bin.cfirst + (p ? p.length/2 : 1))
-        a.teth = t ? env.index[t.slice(0,16)] || 0 : 0
-        // a.teth = env.index[t] || 0
-        // a.teth = env.index.get(t) || 0
+        a.teth = env.index[t] || 0
     })
     return env
 }
@@ -122,9 +112,7 @@ function untwist_bodies(env) {
 function twist_list(env) {
     env.shapes[TWIST].forEach(a => {
         let b = pluck_hash(env.buff, a.bin.cfirst)
-        a.body = b ? env.index[b.slice(0,16)] || 0 : 0
-        // a.body = env.index[b] || 0
-        // a.body = env.index.get(b) || 0
+        a.body = env.index[b] || 0
         if(!a.body)
             return 0
         a.prev = a.body.prev
@@ -181,11 +169,6 @@ function position_atoms(env) {
         a.cy = 400 - env.lines[a.first.hash].yi * 10
         a.colour = a.first.hash.slice(2, 8)
     }
-    // env.shapes[TWIST].forEach(a => {
-    //     a.colour = a.first.hash.slice(2, 8)
-    //     a.cx = a.findex * 7 % 490 + 3
-    //     a.cy = 7 * Math.floor(a.findex * 7 / 490) + 3
-    // })
     return env
 }
 
@@ -226,18 +209,11 @@ function hexes_helper() {
 }
 
 function pluck_hex(b, s, l) {     // requires hexes helper
-    // let hex = Array(l)
-    // let uints = new Uint8Array(b, s, l)
-    // for(i=0; i<l; i++)
-    //     hex[i] = hexes[uints[i]]
-    // return hex.join('')
-
     let hex = ''
     let uints = new Uint8Array(b, s, l) // OPT: 72ms
     for(i=0; i<l; i++) // OPT: 53ms
         hex += hexes[uints[i]] // OPT: 144ms
     return hex
-    // return [...new Uint8Array(b, s, l)].map(n => hexes[n]).join('')
 }
 
 function pluck_hash(b, s) {
@@ -246,8 +222,6 @@ function pluck_hash(b, s) {
         l = 32
     else
         return 0
-    // let l = ({ 41: 32 })[ha] // OPT: 30ms
-    // if (!l) return 0
     return ha + pluck_hex(b, s + 1, l)
 }
 
