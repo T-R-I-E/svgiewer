@@ -44,7 +44,8 @@ showpipe()
 function import_file(env) {
     // return fetch('test/client/files/82e47590-7eb4-4c14-8060-57106643088b/41c3cdc16cef90ace781bcb0f7328611aa14b11d450153be0b134ec8b2706b698c.toda')
     // return fetch('files/41dcb551415a12cfb6aec7148ce4cd21a20c4398624b0bfd7e03c265ba3a0f145b.toda')
-    return fetch('super.toda')
+    // return fetch('super.toda')
+    return fetch('mega.toda')
            .then(res => res.arrayBuffer())
 }
 
@@ -59,6 +60,7 @@ function buff_to_rough(env) {
     env.atoms = []
     env.dupes = []
     env.index = {}
+    // env.index = new Map
     env.shapes = {}
     env.errors = []
 
@@ -82,12 +84,14 @@ function buff_to_rough(env) {
 
         // set values
         let atom = {shape, hash, bin: {length, afirst, pfirst, cfirst: pfirst+5, last: i-1}}
-        if(env.index[hash]) {
+        if(env.index[hash]) { // OPT: profiler says this is slow (200ms) when there's 1M atoms
+        // if(env.index.get(hash)) { // OPT: but it's 500ms with this map... :/
             env.dupes.push(atom)
             continue
         }
         env.atoms.push(atom)
         env.index[hash] = atom
+        // env.index.set(hash, atom)
         if(!env.shapes[shape])
             env.shapes[shape] = [atom]
         else
@@ -101,8 +105,10 @@ function untwist_bodies(env) {
     env.shapes[BODY].forEach(a => {
         let p = pluck_hash(env.buff, a.bin.cfirst)
         a.prev = env.index[p] || 0
+        // a.prev = env.index.get(p) || 0
         let t = pluck_hash(env.buff, a.bin.cfirst + (p ? p.length/2 : 1))
         a.teth = env.index[t] || 0
+        // a.teth = env.index.get(t) || 0
     })
     return env
 }
@@ -111,6 +117,7 @@ function twist_list(env) {
     env.shapes[TWIST].forEach(a => {
         let b = pluck_hash(env.buff, a.bin.cfirst)
         a.body = env.index[b] || 0
+        // a.body = env.index.get(b) || 0
         if(!a.body)
             return 0
         a.prev = a.body.prev
@@ -212,17 +219,28 @@ function hexes_helper() {
 }
 
 function pluck_hex(b, s, l) {     // requires hexes helper
-    let hex = '', uints = new Uint8Array(b, s, l)
-    for(i=0; i<l; i++)
-        hex += hexes[uints[i]]
+    // let hex = Array(l)
+    // let uints = new Uint8Array(b, s, l)
+    // for(i=0; i<l; i++)
+    //     hex[i] = hexes[uints[i]]
+    // return hex.join('')
+
+    let hex = ''
+    let uints = new Uint8Array(b, s, l) // OPT: 72ms
+    for(i=0; i<l; i++) // OPT: 53ms
+        hex += hexes[uints[i]] // OPT: 144ms
     return hex
     // return [...new Uint8Array(b, s, l)].map(n => hexes[n]).join('')
 }
 
 function pluck_hash(b, s) {
-    let ha = pluck_hex(b, s, 1)
-    let l = ({ 41: 32 })[ha]
-    if (!l) return 0
+    let l = 0, ha = pluck_hex(b, s, 1)
+    if(ha === '41')
+        l = 32
+    else
+        return 0
+    // let l = ({ 41: 32 })[ha] // OPT: 30ms
+    // if (!l) return 0
     return ha + pluck_hex(b, s + 1, l)
 }
 
