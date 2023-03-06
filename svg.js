@@ -26,6 +26,7 @@ vp.addEventListener('mouseup', e => {
 
 let showpipe = pipe( wrap('name', import_file, 'buff')
                 //    , buff_to_uints
+                   , start_timer
                    , buff_to_rough
                    , untwist_bodies
                    , twist_list
@@ -33,7 +34,9 @@ let showpipe = pipe( wrap('name', import_file, 'buff')
                    , get_in_line
                    , stack_lines
                    , position_atoms
+                   , end_timer
                    , render_svg
+                   , write_stats
                    , probe
                    )
 
@@ -59,13 +62,19 @@ showpipe()
 function import_file(env) {
     // return fetch('test/client/files/82e47590-7eb4-4c14-8060-57106643088b/41c3cdc16cef90ace781bcb0f7328611aa14b11d450153be0b134ec8b2706b698c.toda')
     // return fetch('files/41dcb551415a12cfb6aec7148ce4cd21a20c4398624b0bfd7e03c265ba3a0f145b.toda')
+    return fetch('plain.toda')
     // return fetch('super.toda')
-    return fetch('mega.toda')
+    // return fetch('mega.toda')
            .then(res => res.arrayBuffer())
 }
 
-function buff_to_uints(env) {
-    env.uints = [...new Uint8Array(env.buff)]
+// function buff_to_uints(env) {
+//     env.uints = [...new Uint8Array(env.buff)]
+//     return env
+// }
+
+function start_timer(env) {
+    env.time = {start: performance.now()}
     return env
 }
 
@@ -187,6 +196,11 @@ function position_atoms(env) {
 }
 
 
+function end_timer(env) {
+    env.time.end = performance.now()
+    return env
+}
+
 // focus line should be lowest
 // make multi-successors a different size? (or a red ring?)
 // parse riggings tries
@@ -214,6 +228,24 @@ function render_svg(env) {
     return env
 }
 
+function write_stats(env) {
+    el('stats').innerHTML =
+    `<p>Analyzed ${env.buff.byteLength.toLocaleString()} bytes
+        containing ${env.atoms.length.toLocaleString()} atoms
+        with ${env.dupes.length.toLocaleString()} duplicates
+        in ${(env.time.end-env.time.start).toFixed(0)}ms.</p>
+     <p>There are ${env.shapes[TWIST].length.toLocaleString()} twists,
+        ${env.shapes[BODY].length.toLocaleString()} bodies
+        ...
+        and ${env.errors.length.toLocaleString()} errors.
+    </p>`
+    return env
+}
+
+function probe(env) {
+    console.log(env)
+    e = env
+}
 
 // helpers
 
@@ -245,11 +277,6 @@ function pluck_length(b, s) {
     return v.getUint32()
 }
 
-
-function probe(env) {
-    console.log(env)
-    e = env
-}
 
 function wrap(inn, f, out) {
     return env => {
