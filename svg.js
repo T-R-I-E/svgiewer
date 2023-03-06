@@ -24,9 +24,9 @@ const el = document.getElementById.bind(document)
 const vp = el('viewport')
 vp.addEventListener('wheel', e => {
     if(e.deltaY < 0)
-        vp.currentScale *= 1.04
+        vp.currentScale *= 1.03
     else
-        vp.currentScale /= 1.04
+        vp.currentScale /= 1.03
 })
 let panning=false
 vp.addEventListener('mousedown', e => panning = true)
@@ -45,7 +45,9 @@ let showpipe = pipe( wrap('name', import_file, 'buff')
                    , start_timer
                    , buff_to_rough
                    , untwist_bodies
+                   , rigging_try
                    , twist_list
+                   , get_hitched
                    , have_successors
                    , get_in_line
                    , stack_lines
@@ -61,9 +63,9 @@ showpipe()
 // import binary
 // TODO: probably just feed the raw buffer into this pipeline instead
 function import_file(env) {
-    // return fetch('plain.toda')
+    return fetch('plain.toda')
     // return fetch('super.toda')
-    return fetch('mega.toda')
+    // return fetch('mega.toda')
            .then(res => res.arrayBuffer())
 }
 
@@ -118,10 +120,24 @@ function buff_to_rough(env) {
 
 function untwist_bodies(env) {
     env.shapes[BODY].forEach(a => {
-        let p = pluck_hash(env.buff, a.bin.cfirst)
+        let i = a.bin.cfirst
+        let p = pluck_hash(env.buff, i)
         a.prev = env.index[p] || 0
-        let t = pluck_hash(env.buff, a.bin.cfirst + (p ? p.length/2 : 1))
+        let t = pluck_hash(env.buff, (i += leng(p)))
         a.teth = env.index[t] || 0
+        a.shld = pluck_hash(env.buff, (i += leng(t)))
+        a.reqs = pluck_hash(env.buff, (i += leng(a.shld)))
+        a.rigs = pluck_hash(env.buff, (i += leng(a.reqs)))
+        a.carg = pluck_hash(env.buff, (i += leng(a.rigs)))
+    })
+    return env
+}
+
+function rigging_try(env) {
+    env.shapes[BODY].forEach(a => {
+        a.hoists = []
+        a.posts  = []
+        a.rigtrie = pairtrier(a.rigs, env)
     })
     return env
 }
@@ -132,8 +148,25 @@ function twist_list(env) {
         a.body = env.index[b] || 0
         if(!a.body)
             return 0
-        a.prev = a.body.prev
+        a.prev = a.body.prev // convenience
         a.teth = a.body.teth
+        a.hoists = a.body.hoists
+        a.posts = a.body.posts
+    })
+    return env
+}
+
+function get_hitched(env) {
+    env.shapes[BODY].forEach(a => {
+        if(!a.rigtrie) return 0
+        a.rigtrie.pairs.forEach(pair => {
+            let meet = env.index[pair[1]] // NOTE: this is a cheap hack
+            if(!meet) return 0
+            if(env.index[pair[0]])
+                return a.posts.push(meet) // NOTE: another cheap hack
+            let lead = fastprev(meet)
+            a.hoists.push([lead, meet])
+        })
     })
     return env
 }
@@ -182,8 +215,8 @@ function stack_lines(env) {
 function position_atoms(env) {
     for(let i = env.shapes[TWIST].length-1; i >= 0; i--) { // focus is first
         let a = env.shapes[TWIST][i]
-        a.cx = 5 + a.findex * 7
-        a.cy = 400 - env.lines[a.first.hash].yi * 10
+        a.cx = 5 + a.findex * 20
+        a.cy = 400 - env.lines[a.first.hash].yi * 30
         a.colour = a.first.hash.slice(2, 8)
     }
     return env
@@ -208,15 +241,22 @@ function end_timer(env) {
 function render_svg(env) {
     let svgs = '', edgestr = '', edges = []
     env.shapes[TWIST].forEach(a => {
-        svgs += `<circle cx="${a.cx}" cy="${a.cy}" r="2.5" fill="#${a.colour}" id="${a.hash}" />`
+        svgs += `<circle cx="${a.cx}" cy="${a.cy}" r="5" fill="#${a.colour}" id="${a.hash}" />`
         if(a.prev)
-            edges.push([a, a.prev])
+            edges.push([a, a.prev, '#666'])
         if(a.teth)
-            edges.push([a, a.teth])
+            edges.push([a, a.teth, '#f9f'])
+        if(a.body.posts.length)
+            a.body.posts.forEach(e => edges.push([a, e, '#00f']))
+        if(a.body.hoists.length)
+            a.body.hoists.forEach(e => {
+                edges.push([a, e[0], '#86f'])
+                edges.push([a, e[1], '#43f'])
+            })
     })
     edges.forEach(e => {
         let fx = e[0].cx, fy = e[0].cy, tx = e[1].cx, ty = e[1].cy
-        edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" fill="none" stroke="#456"/>`
+        edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" fill="none" stroke="${e[2]}"/>`
     })
     vp.innerHTML = '<g id="gtag">' + edgestr + svgs + '</g>'
     return env
@@ -277,6 +317,32 @@ function pluck_length(b, s) {
     // 32 bit int... bigendian? need to specify this in the rig spec
     let v = new DataView(b, s, 4)
     return v.getUint32()
+}
+
+function leng(h) {
+    return h ? h.length/2 : 1
+}
+
+function pairtrier(h, env) {
+    let trie = env.index[h]
+    if(!trie) return 0
+    if(trie.shape !== '63') return 0
+    trie.pairs = []
+    for(let i = trie.bin.cfirst; i < trie.bin.last;) {
+        let k = pluck_hash(env.buff, i)
+        i += leng(k)
+        let v = pluck_hash(env.buff, i)
+        i += leng(v)
+        trie.pairs.push([k, v])
+    }
+    return trie
+}
+
+function fastprev(twist) {
+    if(!twist.prev) return 0
+    if(twist.prev.teth)
+        return twist.prev
+    return fastprev(twist.prev)
 }
 
 
