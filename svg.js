@@ -243,20 +243,20 @@ function render_svg(env) {
     env.shapes[TWIST].forEach(a => {
         svgs += `<circle cx="${a.cx}" cy="${a.cy}" r="5" fill="#${a.colour}" id="${a.hash}" />`
         if(a.prev)
-            edges.push([a, a.prev, '#666'])
+            edges.push([a, a.prev, 'prev'])
         if(a.teth)
-            edges.push([a, a.teth, '#f9f'])
+            edges.push([a, a.teth, 'teth'])
         if(a.body.posts.length)
-            a.body.posts.forEach(e => edges.push([a, e, '#00f']))
+            a.body.posts.forEach(e => edges.push([a, e, 'post']))
         if(a.body.hoists.length)
             a.body.hoists.forEach(e => {
-                edges.push([a, e[0], '#86f'])
-                edges.push([a, e[1], '#43f'])
+                edges.push([a, e[0], 'lead'])
+                edges.push([a, e[1], 'meet'])
             })
     })
     edges.forEach(e => {
         let fx = e[0].cx, fy = e[0].cy, tx = e[1].cx, ty = e[1].cy
-        edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" fill="none" stroke="${e[2]}"/>`
+        edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" fill="none" class="${e[2]}"/>`
     })
     vp.innerHTML = '<g id="gtag">' + edgestr + svgs + '</g>'
     return env
@@ -287,6 +287,8 @@ function show_node(id) {
     let node = e.index[id]
     if(!node) return 0
     el('node').innerHTML = `<pre>${JSON.stringify(node, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
+    ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
+    el(id).classList.add('select')
 }
 
 // helpers
@@ -345,6 +347,11 @@ function fastprev(twist) {
     return fastprev(twist.prev)
 }
 
+function highlight_node(hash) {
+    let twist = e.index[hash] // NOTE: a big hack
+    if(!twist) return 0
+    // el(hash)
+}
 
 function wrap(inn, f, out) {
     return env => {
