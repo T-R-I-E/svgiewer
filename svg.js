@@ -1,3 +1,22 @@
+//
+// TODA file view tool
+//
+
+// TODO:
+// link twists
+// add hoists
+// add posts
+// layout lines + nodes
+// highlight hitches
+// later:
+// hash check
+// shape check
+// sig check
+// hitch check
+// rig check
+
+
+
 const TWIST = 48
 const BODY  = 49
 const el = document.getElementById.bind(document)
@@ -9,23 +28,20 @@ vp.addEventListener('wheel', e => {
     else
         vp.currentScale /= 1.04
 })
-let track=false, panner = e => {
-    vp.currentTranslate.x += e.movementX * 3
-    vp.currentTranslate.y += e.movementY * 3
-}
-vp.addEventListener('mousedown', e => {
-    track = true
-    vp.addEventListener('mousemove', panner)
-})
-vp.addEventListener('mouseup', e => {
-    if(track) {
-        vp.removeEventListener('mousemove', panner)
-        track = false
+let panning=false
+vp.addEventListener('mousedown', e => panning = true)
+vp.addEventListener('mouseup', e => panning = false)
+vp.addEventListener('mousemove', e => {
+    if(e.target.tagName === 'circle') {
+        show_node(e.target.id)
+    }
+    if(panning) {
+        vp.currentTranslate.x += e.movementX * 3
+        vp.currentTranslate.y += e.movementY * 3
     }
 })
 
 let showpipe = pipe( wrap('name', import_file, 'buff')
-                //    , buff_to_uints
                    , start_timer
                    , buff_to_rough
                    , untwist_bodies
@@ -42,36 +58,14 @@ let showpipe = pipe( wrap('name', import_file, 'buff')
 
 showpipe()
 
-
-
-// hash check for atoms
-// packet inflation
-// length check
-// shape check
-// link twists
-// layout lines
-// render
-// add some mouseover for showing details
-// highlight hitches
-// show rig errors
-
-
-
 // import binary
 // TODO: probably just feed the raw buffer into this pipeline instead
 function import_file(env) {
-    // return fetch('test/client/files/82e47590-7eb4-4c14-8060-57106643088b/41c3cdc16cef90ace781bcb0f7328611aa14b11d450153be0b134ec8b2706b698c.toda')
-    // return fetch('files/41dcb551415a12cfb6aec7148ce4cd21a20c4398624b0bfd7e03c265ba3a0f145b.toda')
-    return fetch('plain.toda')
+    // return fetch('plain.toda')
     // return fetch('super.toda')
-    // return fetch('mega.toda')
+    return fetch('mega.toda')
            .then(res => res.arrayBuffer())
 }
-
-// function buff_to_uints(env) {
-//     env.uints = [...new Uint8Array(env.buff)]
-//     return env
-// }
 
 function start_timer(env) {
     env.time = {start: performance.now()}
@@ -245,6 +239,14 @@ function write_stats(env) {
 function probe(env) {
     console.log(env)
     e = env
+}
+
+//
+
+function show_node(id) {
+    let node = e.index[id]
+    if(!node) return 0
+    el('node').innerHTML = `<pre>${JSON.stringify(node, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
 }
 
 // helpers
