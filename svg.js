@@ -22,33 +22,7 @@
 const TWIST = 48
 const BODY  = 49
 const el = document.getElementById.bind(document)
-
 const vp = el('viewport')
-vp.addEventListener('wheel', e => {
-    e.preventDefault()
-    let dy = (201+Math.max(-200, Math.min(200, e.deltaY)))/200
-    if((dy < 1 && vp.currentScale < 0.002) || (dy > 1 && vp.currentScale > 200)) return false
-    vp.currentScale *= dy
-    vp.currentTranslate.y = vp.currentTranslate.y * dy + vp.clientWidth * (1 - dy)
-    vp.currentTranslate.x = vp.currentTranslate.x * dy + vp.clientHeight * (1 - dy)
-})
-let panning=false
-vp.addEventListener('mousedown', e => panning = true)
-vp.addEventListener('mouseup', e => panning = false)
-vp.addEventListener('click', e => {
-    if(e.target.tagName === 'circle') {
-        show_node(e.target.id)
-    }
-})
-vp.addEventListener('mousemove', e => {
-    if (e.target.tagName === 'circle') {
-        highlight_node(e.target.id)
-    }
-    if(panning) {
-        vp.currentTranslate.x += e.movementX * 3
-        vp.currentTranslate.y += e.movementY * 3
-    }
-})
 
 let showpipe = pipe( wrap('name', import_file, 'buff')
                    , start_timer
@@ -60,7 +34,7 @@ let showpipe = pipe( wrap('name', import_file, 'buff')
                    , have_successors
                    , get_in_line
                    , stack_lines
-                   , scooch_atoms
+                   , scooch_twists
                    , end_timer
                    , render_svg
                    , write_stats
@@ -142,7 +116,7 @@ function untwist_bodies(env) {
 
 function rigging_try(env) {
     env.shapes[BODY].forEach(a => {
-        a.hoists = []
+        a.hoisting = []
         a.posts  = []
         a.rigtrie = pairtrier(a.rigs, env)
     })
@@ -155,10 +129,12 @@ function twist_list(env) {
         a.body = env.index[b] || 0
         if(!a.body)
             return 0
-        a.prev = a.body.prev // convenience
+        a.prev = a.body.prev // conveniences
         a.teth = a.body.teth
-        a.hoists = a.body.hoists
+        a.hoisting = a.body.hoisting
         a.posts = a.body.posts
+        a.succ = []
+        a.body.twist = a // NOTE: hack, could be multiples
     })
     return env
 }
@@ -172,7 +148,9 @@ function get_hitched(env) {
             if(env.index[pair[0]])
                 return a.posts.push(meet) // NOTE: another cheap hack
             let lead = fastprev(meet)
-            a.hoists.push([lead, meet])
+            a.hoisting.push([lead, meet])
+            lead.leadhoist = a.twist
+            meet.meethoist = a.twist
         })
     })
     return env
@@ -181,8 +159,6 @@ function get_hitched(env) {
 function have_successors(env) {
     env.shapes[TWIST].forEach(a => {
         if(!a.prev) return 0
-        if(!a.prev.succ)
-            a.prev.succ = []
         a.prev.succ.push(a)
     })
     return env
@@ -218,8 +194,39 @@ function stack_lines(env) {
     return env
 }
 
-function scooch_lines(env) {
-    // move a whole line around...
+function scooch_twists(env) {
+    let closest = 1
+    for(let i=env.firsts.length-1; i>=0; i--) {
+        let t = env.firsts[i]
+        while(t) {
+            let tethx = t.teth?.x || 0
+            let postx = t.post?.x || 0
+            let leadx = t.leadhoist?.x || 0
+            // let meetx = t.meethoist?.x || Infinity
+            let right = Math.max(tethx, postx)
+            if(leadx && right)
+                t.x = (leadx - right) / 2 + right
+            else if(right)
+                t.x = right + 10
+            else if(leadx)
+                t.x = leadx - 10
+            else
+                t.x = t.findex * 20
+
+            if(t.x < t.prev?.x)
+                t.x = t.prev.x + 20 // this might break the leadx invariant...
+
+            t.cx = 5 + t.x
+            t.cy = 400 - t.first.y * 30
+            t.colour = t.first.hash.slice(2, 8)
+            t = t.succ[0]
+        }
+        // set first
+        // set last? or... next? could just do one at a time... and split between tether, uphoist and post
+        // then we can set the xs deterministically, and if there's too much overlap set a global that forces everything further apart...
+            // yeah, track the closest pair
+        // also, only position based on upwards things (that.first.y > this.first.y)...
+    }
     return env
 }
 
@@ -251,8 +258,8 @@ function render_svg(env) {
             edges.push([a, a.teth, 'teth'])
         if(a.body.posts.length)
             a.body.posts.forEach(e => edges.push([a, e, 'post']))
-        if(a.body.hoists.length)
-            a.body.hoists.forEach(e => {
+        if(a.body.hoisting.length)
+            a.body.hoisting.forEach(e => {
                 edges.push([a, e[0], 'lead'])
                 edges.push([a, e[1], 'meet'])
             })
@@ -285,6 +292,34 @@ function probe(env) {
 }
 
 // DOM things
+
+vp.addEventListener('wheel', e => {
+    e.preventDefault()
+    let dy = (201+Math.max(-200, Math.min(200, e.deltaY)))/200
+    if((dy < 1 && vp.currentScale < 0.002) || (dy > 1 && vp.currentScale > 200)) return false
+    vp.currentScale *= dy
+    vp.currentTranslate.y = vp.currentTranslate.y * dy + vp.clientWidth * (1 - dy)
+    vp.currentTranslate.x = vp.currentTranslate.x * dy + vp.clientHeight * (1 - dy)
+})
+
+let panning=false
+vp.addEventListener('mousedown', e => panning = true)
+vp.addEventListener('mouseup', e => panning = false)
+vp.addEventListener('click', e => {
+    if(e.target.tagName === 'circle') {
+        show_node(e.target.id)
+    }
+})
+
+vp.addEventListener('mousemove', e => {
+    if (e.target.tagName === 'circle') {
+        highlight_node(e.target.id)
+    }
+    if(panning) {
+        vp.currentTranslate.x += e.movementX * 3
+        vp.currentTranslate.y += e.movementY * 3
+    }
+})
 
 function show_node(id) {
     let node = e.index[id]
