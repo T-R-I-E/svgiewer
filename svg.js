@@ -51,7 +51,7 @@ let showpipe = pipe( wrap('name', import_file, 'buff')
                    , have_successors
                    , get_in_line
                    , stack_lines
-                   , position_atoms
+                   , scooch_atoms
                    , end_timer
                    , render_svg
                    , write_stats
@@ -63,9 +63,9 @@ showpipe()
 // import binary
 // TODO: probably just feed the raw buffer into this pipeline instead
 function import_file(env) {
-    return fetch('plain.toda')
+    // return fetch('plain.toda')
     // return fetch('super.toda')
-    // return fetch('mega.toda')
+    return fetch('mega.toda')
            .then(res => res.arrayBuffer())
 }
 
@@ -182,11 +182,11 @@ function have_successors(env) {
 }
 
 function get_in_line(env) {
-    env.lines = {}
+    env.firsts = []
     env.shapes[TWIST].forEach(a => {
         [a.first, a.findex] = get_first(a)
         if(!a.findex)
-            env.lines[a.first.hash] = {first: a.first} // , max_length: 1}
+            env.firsts.push(a) // [a.first.hash] = {first: a.first} // , max_length: 1}
     })
     return env
 }
@@ -201,22 +201,48 @@ function get_first(a) {
 }
 
 function stack_lines(env) {
-    let top = 0
-    for(let i = env.shapes[TWIST].length-1; i >= 0; i--) { // focus is first
-        let a = env.shapes[TWIST][i]
-        if(!env.lines[a.first.hash].yi)
-            env.lines[a.first.hash].yi = ++top
-        if(a.teth && a.teth.first && !env.lines[a.teth.first.hash].yi) // just stick yi inside a.teth.first?
-            env.lines[a.teth.first.hash].yi = ++top
-    }
+    // let budget = 100
+    env.firsts.forEach((t,i) => t.y = i+1.5)
+    // env.shapes[TWIST][env.shapes[TWIST].length-1].first.y = 0 // focus is always on the bottom...
+    // TODO: mark focus twist some other way... (maybe just link it in the sidebar)
+    // TODO: scroll to highlight
+    // while(--budget > 0) { // can reduce more for more expensive things...
+    env.firsts.forEach((t,i) => {
+        let min_tether = env.shapes[TWIST].filter(a=>a.first === t).reduce((acc, a) => Math.min(acc, a.teth?.first?.y||Infinity), Infinity)
+        if(min_tether < t.y)
+            t.y = +((min_tether + "").slice(0,-1) + "0" + (i+1))
+        // pick a line
+        // check its tethers (hoists and posts should correlate)
+        // figure out its score -- any downward pressure? how high does it need to go to jump out?
+        // once it's moved mark it as happy? if all lines are happy stop? what if we only move lines up? then we can't make existing tethers unhappy... except for spools, which we can't make happy anyway.
+        // so one pass instead of budget? just move things up as far as needed to make their tethers happy, and leave them where they lay?
+    })
+    env.firsts.sort((a,b) => a.y - b.y).forEach((t,i) => t.y = i)
     return env
 }
 
-function position_atoms(env) {
+// function stack_lines(env) {
+//     let top = 0
+//     for(let i = env.shapes[TWIST].length-1; i >= 0; i--) { // focus is first
+//         let a = env.shapes[TWIST][i]
+//         if(!a.first.yi)
+//             a.first.yi = ++top
+//         if(a.teth && a.teth.first && !a.teth.first.yi) // just stick yi inside a.teth.first?
+//             a.teth.first.yi = ++top
+//     }
+//     return env
+// }
+
+function scooch_lines(env) {
+    // move a whole line around...
+    return env
+}
+
+function scooch_atoms(env) {
     for(let i = env.shapes[TWIST].length-1; i >= 0; i--) { // focus is first
         let a = env.shapes[TWIST][i]
         a.cx = 5 + a.findex * 20
-        a.cy = 400 - env.lines[a.first.hash].yi * 30
+        a.cy = 400 - a.first.y * 30
         a.colour = a.first.hash.slice(2, 8)
     }
     return env
