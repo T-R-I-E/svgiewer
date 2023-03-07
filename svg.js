@@ -197,7 +197,7 @@ function get_first(a) {
     else if (a.prev.first)
         return [a.prev.first, a.prev.findex + 1]
     else
-        return get_first(a.prev)
+        return (([a,b])=>[a,b+1])(get_first(a.prev))
 }
 
 function stack_lines(env) {
@@ -206,8 +206,8 @@ function stack_lines(env) {
         let a = env.shapes[TWIST][i]
         if(!env.lines[a.first.hash].yi)
             env.lines[a.first.hash].yi = ++top
-        if(a.teth && !env.lines[a.teth?.first?.hash]?.yi)
-            env.lines[a.first.hash].yi = ++top
+        if(a.teth && a.teth.first && !env.lines[a.teth.first.hash].yi) // just stick yi inside a.teth.first?
+            env.lines[a.teth.first.hash].yi = ++top
     }
     return env
 }
@@ -281,15 +281,22 @@ function probe(env) {
     e = env
 }
 
-//
+// DOM things
 
 function show_node(id) {
     let node = e.index[id]
     if(!node) return 0
-    el('node').innerHTML = `<pre>${JSON.stringify(node, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
     ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
     el(id).classList.add('select')
+    let json = `<pre>${JSON.stringify(node, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
+    el('node').innerHTML = json.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="show_node(\'$1\');return false;">$1</a>"')
 }
+
+function highlight_node(id) {
+    ;[...document.querySelectorAll('.highlight')].map(n => n.classList.remove('highlight'))
+    el(id)?.classList?.add('highlight')
+}
+
 
 // helpers
 
@@ -345,12 +352,6 @@ function fastprev(twist) {
     if(twist.prev.teth)
         return twist.prev
     return fastprev(twist.prev)
-}
-
-function highlight_node(hash) {
-    let twist = e.index[hash] // NOTE: a big hack
-    if(!twist) return 0
-    // el(hash)
 }
 
 function wrap(inn, f, out) {
