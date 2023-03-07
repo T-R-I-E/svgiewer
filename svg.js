@@ -3,10 +3,7 @@
 //
 
 // TODO:
-// link twists
-// add hoists
-// add posts
-// layout lines + nodes
+// layout nodes
 // highlight hitches
 // later:
 // hash check
@@ -14,7 +11,12 @@
 // sig check
 // hitch check
 // rig check
+// make multi-successors a different size? (or a red ring?)
 
+// mark focus twist some other way... (maybe just link it in the sidebar)
+// scroll to highlight (?)
+// click to select
+// arrows to navigate?
 
 
 const TWIST = 48
@@ -23,17 +25,24 @@ const el = document.getElementById.bind(document)
 
 const vp = el('viewport')
 vp.addEventListener('wheel', e => {
-    if(e.deltaY < 0)
-        vp.currentScale *= 1.03
-    else
-        vp.currentScale /= 1.03
+    e.preventDefault()
+    let dy = (201+Math.max(-200, Math.min(200, e.deltaY)))/200
+    if((dy < 1 && vp.currentScale < 0.002) || (dy > 1 && vp.currentScale > 200)) return false
+    vp.currentScale *= dy
+    vp.currentTranslate.y = vp.currentTranslate.y * dy + vp.clientWidth * (1 - dy)
+    vp.currentTranslate.x = vp.currentTranslate.x * dy + vp.clientHeight * (1 - dy)
 })
 let panning=false
 vp.addEventListener('mousedown', e => panning = true)
 vp.addEventListener('mouseup', e => panning = false)
-vp.addEventListener('mousemove', e => {
+vp.addEventListener('click', e => {
     if(e.target.tagName === 'circle') {
         show_node(e.target.id)
+    }
+})
+vp.addEventListener('mousemove', e => {
+    if (e.target.tagName === 'circle') {
+        highlight_node(e.target.id)
     }
     if(panning) {
         vp.currentTranslate.x += e.movementX * 3
@@ -84,7 +93,7 @@ function buff_to_rough(env) {
     env.errors = []
 
     while(i < lb) {
-        // read hash
+        // read values
         let afirst = i
         let hash = pluck_hash(b, i)
         if(!hash) {
@@ -94,16 +103,14 @@ function buff_to_rough(env) {
         i += hash.length/2
         let pfirst = i
 
-        // read shape
         let shape = pluck_hex(b, i++, 1)
 
-        // read length
         let length = pluck_length(b, i)
         i += 4 + length
 
         // set values
         let atom = {shape, hash, bin: {length, afirst, pfirst, cfirst: pfirst+5, last: i-1}}
-        if(env.index[hash]) { // OPT: profiler says this is slow (300ms) when there's 1M atoms... but it's 500ms w/ Map :/
+        if(env.index[hash]) { // OPT: profiler says this is slow (300ms) when there's 10k atoms (1M dupes)... but it's 500ms w/ Map :/
             env.dupes.push(atom)
             continue
         }
@@ -201,37 +208,15 @@ function get_first(a) {
 }
 
 function stack_lines(env) {
-    // let budget = 100
     env.firsts.forEach((t,i) => t.y = i+1.5)
-    // env.shapes[TWIST][env.shapes[TWIST].length-1].first.y = 0 // focus is always on the bottom...
-    // TODO: mark focus twist some other way... (maybe just link it in the sidebar)
-    // TODO: scroll to highlight
-    // while(--budget > 0) { // can reduce more for more expensive things...
     env.firsts.forEach((t,i) => {
         let min_tether = env.shapes[TWIST].filter(a=>a.first === t).reduce((acc, a) => Math.min(acc, a.teth?.first?.y||Infinity), Infinity)
-        if(min_tether < t.y)
+        if(min_tether < t.y) // move lines under their lowest tether (can get messy with spools etc)
             t.y = +((min_tether + "").slice(0,-1) + "0" + (i+1))
-        // pick a line
-        // check its tethers (hoists and posts should correlate)
-        // figure out its score -- any downward pressure? how high does it need to go to jump out?
-        // once it's moved mark it as happy? if all lines are happy stop? what if we only move lines up? then we can't make existing tethers unhappy... except for spools, which we can't make happy anyway.
-        // so one pass instead of budget? just move things up as far as needed to make their tethers happy, and leave them where they lay?
     })
     env.firsts.sort((a,b) => a.y - b.y).forEach((t,i) => t.y = i)
     return env
 }
-
-// function stack_lines(env) {
-//     let top = 0
-//     for(let i = env.shapes[TWIST].length-1; i >= 0; i--) { // focus is first
-//         let a = env.shapes[TWIST][i]
-//         if(!a.first.yi)
-//             a.first.yi = ++top
-//         if(a.teth && a.teth.first && !a.teth.first.yi) // just stick yi inside a.teth.first?
-//             a.teth.first.yi = ++top
-//     }
-//     return env
-// }
 
 function scooch_lines(env) {
     // move a whole line around...
@@ -254,14 +239,6 @@ function end_timer(env) {
     return env
 }
 
-// focus line should be lowest
-// make multi-successors a different size? (or a red ring?)
-// parse riggings tries
-// cheat on hoists by matching the meet and assuming the lead
-// posts match on both
-// topo sort by tethers (and hoists and posts)
-// let long lines run off the edge, add a zoom component
-// add the info box off to the size
 
 
 function render_svg(env) {
