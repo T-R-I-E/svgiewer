@@ -3,7 +3,7 @@
 //
 
 // TODO:
-// show highlight in sidebar
+// clean up scooching
 // upload file (or pick an example?)
 // emoji/hex
 // rainbow sparkles
@@ -59,7 +59,7 @@ function start_timer(env) {
 
 function buff_to_rough(env) {
     let i = 0, b = env.buff, lb = b.byteLength
-    env.atoms = []
+    env.atoms = []                           // egregiously long env setup
     env.dupes = []
     env.index = {}
     env.shapes = {}
@@ -258,6 +258,7 @@ function write_stats(env) {
         ${env.shapes[BODY].length.toLocaleString()} bodies,
         and <a href="#" onclick="showhide('errors')">${env.errors.length.toLocaleString()} errors</a>.
     </p>
+    <p><a href="#" onclick="emojex()">emoji/hex</a> <a href="#" onclick="rainbowsparkles()">rainbow/sparkles</a></p>
     <div id="errors" class="hidden"><p>${hash_munge(env.errors.map(e=>e.message).join('</p><p>'))}</p></div>
     `
     return env
@@ -341,7 +342,7 @@ function highlight_node(id) {
 }
 
 function hash_munge(str) {
-    return str.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"')
+    return str.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"').replaceAll(/>41(.*?)</g, (m,p) => emhx ? `>41${p}<` : `>${p.match(/.{1,11}/g).map(n=>emojis[parseInt(n,16)%emojis.length]).join('')}<`)
 }
 
 function scroll_to(x, y) {
@@ -352,6 +353,12 @@ function scroll_to(x, y) {
 
 function showhide(id) {
     el(id)?.classList?.toggle('hidden')
+}
+
+function emojex() {
+    emhx ^= 1
+    select_node(document.getElementsByClassName('select')[0]?.id)
+    highlight_node(document.getElementsByClassName('highlight')[0]?.id)
 }
 
 // helpers
@@ -407,6 +414,38 @@ function fastprev(twist) {
     if(twist.prev.teth)
         return twist.prev
     return fastprev(twist.prev)
+}
+
+emojis = get_me_all_the_emoji()
+emhx = 1
+function get_me_all_the_emoji() {
+    let testCanvas = document.createElement("canvas")
+    let miniCtx = testCanvas.getContext('2d')
+    let q = []
+    let MAGICK_EMOJI_NUMBER = 127514
+    for (let i = 0; i < 2000; i++) {
+        let char = String.fromCodePoint(MAGICK_EMOJI_NUMBER + i)
+        if (is_char_emoji(miniCtx, char))
+            q.push(char)
+    }
+    return q
+}
+
+function is_char_emoji(ctx, char) {
+    let size = ctx.measureText(char).width
+    if (!size) return false
+    ctx.clearRect(0, 0, size + 3, size + 3)      // three is a lucky number
+    ctx.fillText(char, 0, size)                  // probably chops off the emoji edges
+    let data = ctx.getImageData(0, 0, size, size).data
+    for (var i = data.length - 4; i >= 0; i -= 4)// step through the RBGA values
+        if (!is_colour_boring(data[i], data[i + 1], data[i + 2]))
+            return true
+    return false
+}
+
+function is_colour_boring(r, g, b) {                // if the pixel is not black, white, or red,
+    let s = r + g + b                                 // then it probably belongs to an emoji
+    return (!s || s === 765 || s === 255 && s === r)
 }
 
 function wrap(inn, f, out) {
