@@ -3,10 +3,8 @@
 //
 
 // TODO:
-// make sidebar
 // show highlight in sidebar
 // upload file (or pick an example?)
-// arrows to navigate?
 // emoji/hex
 // later:
 // highlight hitches
@@ -295,7 +293,6 @@ vp.addEventListener('click', e => {
         select_node(e.target.id)
     }
 })
-
 vp.addEventListener('mousemove', e => {
     if (e.target.tagName === 'circle') {
         highlight_node(e.target.id)
@@ -304,6 +301,20 @@ vp.addEventListener('mousemove', e => {
         vp.currentTranslate.x += e.movementX * 3
         vp.currentTranslate.y += e.movementY * 3
     }
+})
+
+window.addEventListener('keydown', e => {
+    let key = e.keyCode, id = document.getElementsByClassName('select')[0]?.id
+    let t = env.index[id]                    // uses global env
+    if(!id || !t) return 0
+    if(key === 38)                           // up up
+        select_node(t.meethoist?.hash || t.leadhoist?.hash || t.posts[0]?.hash)
+    if(key === 40)                           // down down
+        select_node(t.hoisting[0]?.[0]?.hash)
+    if(key === 37)                           // left right
+        select_node(t.prev.hash)
+    if(key === 39)                           // left right
+        select_node(t.succ[0]?.hash)
 })
 
 function select_node(id) {
