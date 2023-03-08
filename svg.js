@@ -15,7 +15,7 @@
 // hitch check
 // rig check
 // make multi-successors a different size? (or a red ring?)
-// list errors
+// list other shapes
 
 
 
@@ -133,6 +133,8 @@ function have_successors(env) {
     env.shapes[TWIST].forEach(a => {         // seperate phase so everything will .succ
         if(!a.prev) return 0
         a.prev.succ.push(a)                  // HACK: doesn't check legitimacy
+        if(a.prev.succ.length > 1)
+            env.errors.push({twist: a, message: `Equivocation in "${a.prev.hash}"`})
     })
     return env
 }
@@ -223,6 +225,7 @@ function end_timer(env) {
 function render_svg(env) {
     let svgs = '', edgestr = '', edges = []
     env.shapes[TWIST].forEach(a => {
+        if(!a.cx) return 0                   // ignore equivocal successors
         svgs += `<circle cx="${a.cx}" cy="${a.cy}" r="5" fill="#${a.colour}" id="${a.hash}" />`
         if(a.prev)
             edges.push([a, a.prev, 'prev'])
@@ -238,6 +241,7 @@ function render_svg(env) {
     })
     edges.reverse().forEach(e => {           // prev and teth at back for style
         let fx = e[0].cx, fy = e[0].cy, tx = e[1].cx, ty = e[1].cy
+        if(!(fx && fy && tx && ty)) return 0 // also eq successor
         edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" fill="none" class="${e[2]}"/>`
     })
     vp.innerHTML = '<g id="gtag">' + edgestr + svgs + '</g>'
@@ -251,10 +255,11 @@ function write_stats(env) {
         with ${env.dupes.length.toLocaleString()} duplicates
         in ${(env.time.end-env.time.start).toFixed(0)}ms.</p>
      <p>There are ${env.shapes[TWIST].length.toLocaleString()} twists,
-        ${env.shapes[BODY].length.toLocaleString()} bodies
-        ...
-        and ${env.errors.length.toLocaleString()} errors.
-    </p>`
+        ${env.shapes[BODY].length.toLocaleString()} bodies,
+        and <a href="#" onclick="showhide('errors')">${env.errors.length.toLocaleString()} errors</a>.
+    </p>
+    <div id="errors" class="hidden"><p>${hash_munge(env.errors.map(e=>e.message).join('</p><p>'))}</p></div>
+    `
     return env
 }
 
@@ -343,6 +348,10 @@ function scroll_to(x, y) {
     let MAGIC_CONSTANT = -2.2                // ¯\_(ツ)_/¯
     vp.currentTranslate.x = MAGIC_CONSTANT * x * vp.currentScale + vp.clientWidth
     vp.currentTranslate.y = MAGIC_CONSTANT * y * vp.currentScale + vp.clientHeight
+}
+
+function showhide(id) {
+    el(id)?.classList?.toggle('hidden')
 }
 
 // helpers
