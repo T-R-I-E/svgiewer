@@ -312,7 +312,7 @@ vp.addEventListener('mousemove', e => {
 
 window.addEventListener('keydown', e => {
     let key = e.keyCode, id = document.getElementsByClassName('select')[0]?.id
-    let t = env.index[id]                    // uses global env
+    let t = env.index[id]                    // global env
     if(!id || !t) return 0
     if(key === 38)                           // up up
         select_node(t.meethoist?.hash || t.leadhoist?.hash || t.posts[0]?.hash)
@@ -325,7 +325,7 @@ window.addEventListener('keydown', e => {
 })
 
 function select_node(id) {
-    let t = env.index[id], dom = el(id)      // uses global env
+    let t = env.index[id], dom = el(id)      // global env
     if(!t || !dom) return 0
     ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
     dom.classList.add('select')
@@ -338,10 +338,10 @@ function highlight_node(id) {
     ;[...document.querySelectorAll('.highlight')].map(n => n.classList.remove('highlight'))
     el(id)?.classList?.add('highlight')
     let html = `Highlight: "${id}"`
-    el('highlight').innerHTML = hash_munge(html).replace(/onmouseover=".*?"/, '')
+    el('highlight').innerHTML = hash_munge(html).replace(/onmouseover=".*?"/, '') // does not play well with onclick
 }
 
-function hash_munge(str) {
+function hash_munge(str) {                   // beautiful nonsense
     return str.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"').replaceAll(/>41(.*?)</g, (m,p) => emhx ? `>41${p}<` : `>${p.match(/.{1,11}/g).map(n=>emojis[parseInt(n,16)%emojis.length]).join('')}<`)
 }
 
@@ -416,9 +416,14 @@ function fastprev(twist) {
     return fastprev(twist.prev)
 }
 
+function rainbowsparkles() {
+    ;[...document.querySelectorAll('path')].map(p=>p.classList.toggle('rainbowsparkles'))
+    ;[...document.querySelectorAll('circle')].map(p=>p.classList.toggle('nodesparkles'))
+}
+
 emojis = get_me_all_the_emoji()
 emhx = 1
-function get_me_all_the_emoji() {
+function get_me_all_the_emoji() {            // over-the-top emoji fetching courtesy of bogomoji
     let testCanvas = document.createElement("canvas")
     let miniCtx = testCanvas.getContext('2d')
     let q = []
@@ -430,23 +435,22 @@ function get_me_all_the_emoji() {
     }
     return q
 }
-
 function is_char_emoji(ctx, char) {
     let size = ctx.measureText(char).width
     if (!size) return false
-    ctx.clearRect(0, 0, size + 3, size + 3)      // three is a lucky number
-    ctx.fillText(char, 0, size)                  // probably chops off the emoji edges
+    ctx.clearRect(0, 0, size + 3, size + 3)  // three is a lucky number
+    ctx.fillText(char, 0, size)              // probably chops off the emoji edges
     let data = ctx.getImageData(0, 0, size, size).data
-    for (var i = data.length - 4; i >= 0; i -= 4)// step through the RBGA values
+    for (var i = data.length - 4; i >= 0; i -= 4)
         if (!is_colour_boring(data[i], data[i + 1], data[i + 2]))
             return true
     return false
 }
-
-function is_colour_boring(r, g, b) {                // if the pixel is not black, white, or red,
-    let s = r + g + b                                 // then it probably belongs to an emoji
+function is_colour_boring(r, g, b) {         // if the pixel is not black, white, or red,
+    let s = r + g + b                        // then it probably belongs to an emoji
     return (!s || s === 765 || s === 255 && s === r)
 }
+
 
 function wrap(inn, f, out) {
     return env => {

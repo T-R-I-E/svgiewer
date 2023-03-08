@@ -54,6 +54,52 @@
         .hidden {
             display: none;
         }
+        .nodesparkles {
+            animation: rainbow 5071ms infinite;
+        }
+        .rainbowsparkles {
+            animation: sparkle 3s infinite alternate ease-in-out;
+        }
+        @keyframes rainbow {
+            0% {
+            }
+            20% {
+                filter: hue-rotate(90deg) drop-shadow(16px 16px 20px blue) brightness(2) saturate(200%);
+            }
+            70% {
+                filter: hue-rotate(120deg) blur(1px) brightness(3) saturate(300%);
+                r: 12;
+            }
+            100% {
+                filter: hue-rotate(200deg);
+                r: 9
+            }
+        }
+        @keyframes sparkle {
+            0% {
+                stroke-dasharray: 1px;
+                stroke-dashoffset: 0%;
+            }
+            50% {
+                stroke-dasharray: 30px;
+                stroke-opacity: 50%;
+                stroke-width: 5;
+                stroke-dashoffset: 15%;
+                filter: hue-rotate(90deg);
+            }
+            80% {
+                stroke-dasharray: 8px;
+                stroke-width: 2;
+                stroke-dashoffset: 10%;
+                filter: hue-rotate(180deg);
+            }
+            100% {
+                stroke-dasharray: 17px;
+                stroke-width: 3;
+                stroke-dashoffset: 30%;
+                filter: hue-rotate(2700deg);
+            }
+        }
     </style>
 </head>
 <body>
