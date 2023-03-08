@@ -44,7 +44,6 @@ let showpipe = pipe( wrap('name', import_file, 'buff')
 
 showpipe()
 
-// import binary
 function import_file(env) {
     return fetch('plain.toda')
     // return fetch('super.toda')
@@ -58,7 +57,6 @@ function start_timer(env) {
     return env
 }
 
-// binary buffer to rough atoms
 function buff_to_rough(env) {
     let i = 0, b = env.buff, lb = b.byteLength
     env.atoms = []
@@ -91,19 +89,16 @@ function buff_to_rough(env) {
         }
         env.atoms.push(atom)
         env.index[hash] = atom
-        if(!env.shapes[shape])
-            env.shapes[shape] = [atom]
-        else
-            env.shapes[shape].push(atom)
+        ;(env.shapes[shape]||=[]).push(atom) // shapes on demand
     }
 
     return env
 }
 
 function untwist_bodies(env) {
-    env.shapes[BODY].forEach(a => {
+    env.shapes[BODY].forEach(a => {          // reverse twister all six body parts
         let i = a.bin.cfirst
-        let p = pluck_hash(env.buff, i)      // unpack each body field in order
+        let p = pluck_hash(env.buff, i)      // order is important
         a.prev = env.index[p] || 0           // objectify prev
         let t = pluck_hash(env.buff, (i += leng(p)))
         a.teth = env.index[t] || 0           // objectify teth
@@ -135,7 +130,7 @@ function twist_list(env) {
 }
 
 function have_successors(env) {
-    env.shapes[TWIST].forEach(a => {         // seperate phase so everything has .succ
+    env.shapes[TWIST].forEach(a => {         // seperate phase so everything will .succ
         if(!a.prev) return 0
         a.prev.succ.push(a)                  // HACK: doesn't check legitimacy
     })
@@ -146,7 +141,7 @@ function get_hitched(env) {
     env.shapes[BODY].forEach(a => {          // slurps out connections. cheats a lot.
         if(!a.rigtrie) return 0
         a.rigtrie.pairs.forEach(pair => {
-            let meet = env.index[pair[1]]    // HACK: doesn't check shield
+            let meet = env.index[pair[1]]    // HACK: doesn't check hoist
             if(!meet) return 0
             if(env.index[pair[0]])
                 return a.posts.push(meet)    // HACK: doesn't check post
@@ -164,25 +159,26 @@ function get_in_line(env) {
     env.shapes[TWIST].forEach(a => {
         [a.first, a.findex] = get_first(a)
         if(!a.findex)
-            env.firsts.push(a)
+            env.firsts.push(a)               // a DAG root in this bag of atoms
     })
     return env
 }
 
 function get_first(a) {
-    if (!a.prev)
+    if (!a.prev)                             // creatio ex nihilo
         return [a, 0]
-    else if (a.prev.first)
+    else if (a.prev.first)                   // previously unknown as
         return [a.prev.first, a.prev.findex + 1]
-    else
+    else                                     // get recursive on normies
         return (([a,b])=>[a,b+1])(get_first(a.prev))
 }
 
-function stack_lines(env) {
-    env.firsts.forEach((t,i) => t.y = i+1.5)
+function stack_lines(env) {                  // one-pass line aligner, B- for spools
+    env.firsts.forEach((t,i) => t.y = i+1.5) // .5 for the atrocious ordering hack
     env.firsts.forEach((t,i) => {
-        let min_tether = env.shapes[TWIST].filter(a=>a.first === t).reduce((acc, a) => Math.min(acc, a.teth?.first?.y||Infinity), Infinity)
-        if(min_tether < t.y) // move lines under their lowest tether (can get messy with spools etc)
+        let min_tether = env.shapes[TWIST].filter(a=>a.first === t)
+                            .reduce((acc, a) => Math.min(acc, a.teth?.first?.y||Infinity), Infinity)
+        if(min_tether < t.y)                 // move lines under their lowest tether
             t.y = +((min_tether + "").slice(0,-1) + "0" + (i+1))
     })
     env.firsts.sort((a,b) => a.y - b.y).forEach((t,i) => t.y = i)
@@ -190,16 +186,14 @@ function stack_lines(env) {
 }
 
 function scooch_twists(env) {
-    let closest = 1
     for(let i=env.firsts.length-1; i>=0; i--) {
-        let t = env.firsts[i]
+        let t = env.firsts[i]                // start at the top
         while(t) {
-            let tethx = t.teth?.x || 0
+            let tethx = t.teth?.x || 0       // these profligate defaults are grating
             let postx = t.post?.x || 0
             let leadx = t.leadhoist?.x || 0
-            // let meetx = t.meethoist?.x || Infinity
             let right = Math.max(tethx, postx)
-            if(leadx && right)
+            if(leadx && right)               // grating and flawed
                 t.x = (leadx - right) / 2 + right
             else if(right)
                 t.x = right + 10
@@ -209,39 +203,22 @@ function scooch_twists(env) {
                 t.x = t.findex * 20
 
             if(t.x < t.prev?.x)
-                t.x = t.prev.x + 20 // this might break the leadx invariant...
+                t.x = t.prev.x + 20          // FIXME: breaks the leadx invariant
 
             t.cx = 5 + t.x
             t.cy = 400 - t.first.y * 30
             t.colour = t.first.hash.slice(2, 8)
             t = t.succ[0]
         }
-        // set first
-        // set last? or... next? could just do one at a time... and split between tether, uphoist and post
-        // then we can set the xs deterministically, and if there's too much overlap set a global that forces everything further apart...
-            // yeah, track the closest pair
-        // also, only position based on upwards things (that.first.y > this.first.y)...
+        // TODO: set the xs deterministically, track the closest pair, and if there's too much overlap set a global that forces everything further apart... (even this might not be enough though, if there's jumps between levels -- may need up pressure)
     }
     return env
 }
-
-function scooch_atoms(env) {
-    for(let i = env.shapes[TWIST].length-1; i >= 0; i--) { // focus is first
-        let a = env.shapes[TWIST][i]
-        a.cx = 5 + a.findex * 20
-        a.cy = 400 - a.first.y * 30
-        a.colour = a.first.hash.slice(2, 8)
-    }
-    return env
-}
-
 
 function end_timer(env) {
     env.time.end = performance.now()
     return env
 }
-
-
 
 function render_svg(env) {
     let svgs = '', edgestr = '', edges = []
@@ -259,7 +236,7 @@ function render_svg(env) {
                 edges.push([a, e[1], 'meet'])
             })
     })
-    edges.forEach(e => {
+    edges.reverse().forEach(e => {           // prev and teth at back for style
         let fx = e[0].cx, fy = e[0].cy, tx = e[1].cx, ty = e[1].cy
         edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" fill="none" class="${e[2]}"/>`
     })
@@ -294,8 +271,8 @@ function probe(env) {
 }
 
 function setenv(x) {
-    env = x // global
-    return env
+    env = x                                  // make a global for DOM consumption
+    return env                               // ^ kind of a hack but pipe is async
 }
 
 // DOM things
@@ -321,7 +298,6 @@ vp.addEventListener('click', e => {
 vp.addEventListener('mousemove', e => {
     if (e.target.tagName === 'circle') {
         highlight_node(e.target.id)
-        let node = env.index[e.target.id]
     }
     if(panning) {
         vp.currentTranslate.x += e.movementX * 3
@@ -330,12 +306,12 @@ vp.addEventListener('mousemove', e => {
 })
 
 function select_node(id) {
-    let node = env.index[id] // outside
+    let node = env.index[id]                 // uses global env
     if(!node) return 0
     ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
     el(id).classList.add('select')
-    let json = `<pre>${JSON.stringify(node, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
-    el('node').innerHTML = json.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"')
+    let html = `<pre>${JSON.stringify(node, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
+    el('node').innerHTML = html.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"')
     scroll_to(node.cx, node.cy)
 }
 
@@ -345,11 +321,10 @@ function highlight_node(id) {
 }
 
 function scroll_to(x, y) {
-    let MAGIC_CONSTANT = -2.2 // ¯\_(ツ)_/¯
+    let MAGIC_CONSTANT = -2.2                // ¯\_(ツ)_/¯
     vp.currentTranslate.x = MAGIC_CONSTANT * x * vp.currentScale + vp.clientWidth
     vp.currentTranslate.y = MAGIC_CONSTANT * y * vp.currentScale + vp.clientHeight
 }
-
 
 // helpers
 
@@ -358,11 +333,11 @@ function hexes_helper() {
     return Array.from(Array(256)).map((n,i)=>i.toString(16).padStart(2, '0'))
 }
 
-function pluck_hex(b, s, l) {           // requires hexes helper
+function pluck_hex(b, s, l) {                // requires hexes helper
     let hex = ''
-    let uints = new Uint8Array(b, s, l) // OPT: 72ms
-    for(i=0; i<l; i++)                  // OPT: 53ms
-        hex += hexes[uints[i]]          // OPT: 144ms
+    let uints = new Uint8Array(b, s, l)      // OPT: 72ms
+    for(i=0; i<l; i++)                       // OPT: 53ms
+        hex += hexes[uints[i]]               // OPT: 144ms
     return hex
 }
 
@@ -376,19 +351,18 @@ function pluck_hash(b, s) {
 }
 
 function pluck_length(b, s) {
-    // TODO: 32 bit int in bigendian format: need to specify this in the rig spec
-    let v = new DataView(b, s, 4)
+    let v = new DataView(b, s, 4)            // 32 bit bigendian int
     return v.getUint32()
 }
 
 function leng(h) {
-    return h ? h.length/2 : 1
+    return h ? h.length/2 : 1                // byte length from hex or 0
 }
 
 function pairtrier(h, env) {
     let trie = env.index[h]
     if(!trie) return 0
-    if(trie.shape !== '63') return 0
+    if(trie.shape !== '63') return 0         // don't try to trie a non-trie tree
     trie.pairs = []
     for(let i = trie.bin.cfirst; i < trie.bin.last;) {
         let k = pluck_hash(env.buff, i)
@@ -412,7 +386,7 @@ function wrap(inn, f, out) {
         let val = f(env[inn])                // TODO: cope without inn&out
         let w = v => (env[out] = v) && env
         return val.constructor === Promise
-             ? val.then(w) // (v => w(v))    // fun made a promise
+             ? val.then(w)                   // fun made a promise
              : w(val)                        // TODO: promise back y'all
     }
 }
@@ -423,19 +397,19 @@ function pipe(...funs) {
 
     function inner() {
       fun = funs[pc++]
-      if(!fun) return 0                 // no fun
+      if(!fun) return 0                      // no fun
 
-      if(fun.async)                     // async fun (non-promise)
+      if(fun.async)                          // async fun (non-promise)
         return new Promise(f => fun.async(env, f)).then(cb)
 
-      return cb(fun(env))               // sync fun
+      return cb(fun(env))                    // sync fun
     }
 
     function cb(new_env) {
-      env = new_env                     // does something
+      env = new_env                          // does something
 
       if(env && env.constructor === Promise)
-        return env.then(cb)            // promise fun
+        return env.then(cb)                  // promise fun
 
       return inner()
     }
