@@ -39,6 +39,8 @@ let showpipe = pipe( wrap('name', import_file, 'buff')
                    , render_svg
                    , write_stats
                    , probe
+                   , setenv
+                   , select_focus
                    )
 
 showpipe()
@@ -46,9 +48,9 @@ showpipe()
 // import binary
 // TODO: probably just feed the raw buffer into this pipeline instead
 function import_file(env) {
-    // return fetch('plain.toda')
+    return fetch('plain.toda')
     // return fetch('super.toda')
-    return fetch('mega.toda')
+    // return fetch('mega.toda')
            .then(res => res.arrayBuffer())
 }
 
@@ -286,20 +288,32 @@ function write_stats(env) {
     return env
 }
 
+function select_focus(env) {
+    let focus = env.shapes[TWIST][env.shapes[TWIST].length-1]
+    el(focus.hash).classList.add('focus')
+    select_node(focus.hash)
+    return env
+}
+
 function probe(env) {
     console.log(env)
-    e = env
+    return env
+}
+
+function setenv(x) {
+    env = x // global
+    return env
 }
 
 // DOM things
 
 vp.addEventListener('wheel', e => {
-    e.preventDefault()
     let dy = (201+Math.max(-200, Math.min(200, e.deltaY)))/200
     if((dy < 1 && vp.currentScale < 0.002) || (dy > 1 && vp.currentScale > 200)) return false
     vp.currentScale *= dy
     vp.currentTranslate.y = vp.currentTranslate.y * dy + vp.clientWidth * (1 - dy)
     vp.currentTranslate.x = vp.currentTranslate.x * dy + vp.clientHeight * (1 - dy)
+    return e.preventDefault() || false
 })
 
 let panning=false
@@ -307,13 +321,14 @@ vp.addEventListener('mousedown', e => panning = true)
 vp.addEventListener('mouseup', e => panning = false)
 vp.addEventListener('click', e => {
     if(e.target.tagName === 'circle') {
-        show_node(e.target.id)
+        select_node(e.target.id)
     }
 })
 
 vp.addEventListener('mousemove', e => {
     if (e.target.tagName === 'circle') {
         highlight_node(e.target.id)
+        let node = env.index[e.target.id]
     }
     if(panning) {
         vp.currentTranslate.x += e.movementX * 3
@@ -321,18 +336,25 @@ vp.addEventListener('mousemove', e => {
     }
 })
 
-function show_node(id) {
-    let node = e.index[id]
+function select_node(id) {
+    let node = env.index[id] // outside
     if(!node) return 0
     ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
     el(id).classList.add('select')
     let json = `<pre>${JSON.stringify(node, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
-    el('node').innerHTML = json.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="show_node(\'$1\');return false;">$1</a>"')
+    el('node').innerHTML = json.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"')
+    scroll_to(node.cx, node.cy)
 }
 
 function highlight_node(id) {
     ;[...document.querySelectorAll('.highlight')].map(n => n.classList.remove('highlight'))
     el(id)?.classList?.add('highlight')
+}
+
+function scroll_to(x, y) {
+    let MAGIC_CONSTANT = -2.2 // ¯\_(ツ)_/¯
+    vp.currentTranslate.x = MAGIC_CONSTANT * x * vp.currentScale + vp.clientWidth
+    vp.currentTranslate.y = MAGIC_CONSTANT * y * vp.currentScale + vp.clientHeight
 }
 
 
@@ -343,11 +365,11 @@ function hexes_helper() {
     return Array.from(Array(256)).map((n,i)=>i.toString(16).padStart(2, '0'))
 }
 
-function pluck_hex(b, s, l) {     // requires hexes helper
+function pluck_hex(b, s, l) {           // requires hexes helper
     let hex = ''
     let uints = new Uint8Array(b, s, l) // OPT: 72ms
-    for(i=0; i<l; i++) // OPT: 53ms
-        hex += hexes[uints[i]] // OPT: 144ms
+    for(i=0; i<l; i++)                  // OPT: 53ms
+        hex += hexes[uints[i]]          // OPT: 144ms
     return hex
 }
 

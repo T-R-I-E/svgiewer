@@ -9,6 +9,10 @@
         svg {
             background-color: rgb(239, 255, 250);
         }
+        circle {
+            stroke: #000;
+            stroke-width: 1;
+        }
         .prev {
             stroke: #999
         }
@@ -24,17 +28,21 @@
         .post {
             stroke: rgb(255, 111, 0)
         }
-        .select {
-            /* fill: rgb(238, 0, 255); */
-            fill-opacity: 50%;
-            r: 8;
-            stroke-width: 3;
-            stroke: yellow;
+        .focus {
+            r: 9;
+            stroke-width: 4;
+            stroke:#ff17c9
         }
         .highlight {
             r: 8;
             stroke-width: 4;
             stroke-opacity: 50%;
+            stroke: yellow;
+        }
+        .select {
+            r: 8;
+            fill-opacity: 50%;
+            stroke-width: 3;
             stroke: rgb(0, 255, 60);
         }
     </style>
