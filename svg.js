@@ -6,6 +6,7 @@
 // show highlight in sidebar
 // upload file (or pick an example?)
 // emoji/hex
+// rainbow sparkles
 // later:
 // highlight hitches
 // hash check
@@ -44,8 +45,8 @@ let showpipe = pipe( wrap('name', import_file, 'buff')
 showpipe()
 
 function import_file(env) {
-    return fetch('plain.toda')
-    // return fetch('super.toda')
+    // return fetch('plain.toda')
+    return fetch('super.toda')
     // return fetch('mega.toda')
           .then(res => res.arrayBuffer())
           .catch(err => console.log('oops')) // stop trying to make fetch happen
@@ -323,13 +324,19 @@ function select_node(id) {
     ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
     dom.classList.add('select')
     let html = `<pre>${JSON.stringify(t, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
-    el('node').innerHTML = html.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"')
+    el('select').innerHTML = hash_munge(html)
     scroll_to(t.cx, t.cy)
 }
 
 function highlight_node(id) {
     ;[...document.querySelectorAll('.highlight')].map(n => n.classList.remove('highlight'))
     el(id)?.classList?.add('highlight')
+    let html = `Highlight: "${id}"`
+    el('highlight').innerHTML = hash_munge(html).replace(/onmouseover=".*?"/, '')
+}
+
+function hash_munge(str) {
+    return str.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"')
 }
 
 function scroll_to(x, y) {
