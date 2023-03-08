@@ -14,13 +14,16 @@
             stroke-width: 1;
         }
         .prev {
-            stroke: #999
+            stroke: #999;
+            stroke-linecap: butt;
         }
         .teth {
-            stroke: #f9f
+            stroke: #f9f;
+            stroke-linecap: butt;
         }
         .lead {
-            stroke: #86f
+            stroke: #86f;
+            stroke-linecap: butt;
         }
         .meet {
             stroke: rgb(61, 255, 51)
@@ -45,13 +48,18 @@
             stroke-width: 3;
             stroke: rgb(0, 255, 60);
         }
+        #sidebar {
+            float: right;
+        }
     </style>
 </head>
 <body>
     <!-- dragon drops  -->
     <svg id="viewport" style="width:500px; height:500px"></svg>
-    <div id="stats"></div>
-    <div id="node"></div>
+    <div id="sidebar">
+        <div id="stats"></div>
+        <div id="node"></div>
+    </div>
     <script src="svg.js"></script>
 </body>
 </html>

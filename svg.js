@@ -3,11 +3,11 @@
 //
 
 // TODO:
-// refactor
 // make sidebar
 // show highlight in sidebar
 // upload file (or pick an example?)
 // arrows to navigate?
+// emoji/hex
 // later:
 // highlight hitches
 // hash check
@@ -16,6 +16,7 @@
 // hitch check
 // rig check
 // make multi-successors a different size? (or a red ring?)
+// list errors
 
 
 
@@ -306,13 +307,13 @@ vp.addEventListener('mousemove', e => {
 })
 
 function select_node(id) {
-    let node = env.index[id]                 // uses global env
-    if(!node) return 0
+    let t = env.index[id], dom = el(id)      // uses global env
+    if(!t || !dom) return 0
     ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
-    el(id).classList.add('select')
-    let html = `<pre>${JSON.stringify(node, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
+    dom.classList.add('select')
+    let html = `<pre>${JSON.stringify(t, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
     el('node').innerHTML = html.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"')
-    scroll_to(node.cx, node.cy)
+    scroll_to(t.cx, t.cy)
 }
 
 function highlight_node(id) {
