@@ -3,9 +3,13 @@
 //
 
 // TODO:
-// layout nodes
-// highlight hitches
+// refactor
+// make sidebar
+// show highlight in sidebar
+// upload file (or pick an example?)
+// arrows to navigate?
 // later:
+// highlight hitches
 // hash check
 // shape check
 // sig check
@@ -13,10 +17,6 @@
 // rig check
 // make multi-successors a different size? (or a red ring?)
 
-// mark focus twist some other way... (maybe just link it in the sidebar)
-// scroll to highlight (?)
-// click to select
-// arrows to navigate?
 
 
 const TWIST = 48
@@ -28,10 +28,9 @@ let showpipe = pipe( wrap('name', import_file, 'buff')
                    , start_timer
                    , buff_to_rough
                    , untwist_bodies
-                   , rigging_try
                    , twist_list
-                   , get_hitched
                    , have_successors
+                   , get_hitched
                    , get_in_line
                    , stack_lines
                    , scooch_twists
@@ -46,12 +45,12 @@ let showpipe = pipe( wrap('name', import_file, 'buff')
 showpipe()
 
 // import binary
-// TODO: probably just feed the raw buffer into this pipeline instead
 function import_file(env) {
     return fetch('plain.toda')
     // return fetch('super.toda')
     // return fetch('mega.toda')
-           .then(res => res.arrayBuffer())
+          .then(res => res.arrayBuffer())
+          .catch(err => console.log('oops')) // stop trying to make fetch happen
 }
 
 function start_timer(env) {
@@ -74,7 +73,7 @@ function buff_to_rough(env) {
         let hash = pluck_hash(b, i)
         if(!hash) {
             env.errors.push({afirst, message: "Improper atom"})
-            return env // stop trying to process buff
+            return env                       // oh no buff is hopeless
         }
         i += hash.length/2
         let pfirst = i
@@ -86,7 +85,7 @@ function buff_to_rough(env) {
 
         // set values
         let atom = {shape, hash, bin: {length, afirst, pfirst, cfirst: pfirst+5, last: i-1}}
-        if(env.index[hash]) { // OPT: profiler says this is slow (300ms) when there's 10k atoms (1M dupes)... but it's 500ms w/ Map :/
+        if(env.index[hash]) {                // OPT: this takes 300ms w/ 10k atoms (1M dupes) -- but 500ms w/ Map
             env.dupes.push(atom)
             continue
         }
@@ -104,23 +103,17 @@ function buff_to_rough(env) {
 function untwist_bodies(env) {
     env.shapes[BODY].forEach(a => {
         let i = a.bin.cfirst
-        let p = pluck_hash(env.buff, i)
-        a.prev = env.index[p] || 0
+        let p = pluck_hash(env.buff, i)      // unpack each body field in order
+        a.prev = env.index[p] || 0           // objectify prev
         let t = pluck_hash(env.buff, (i += leng(p)))
-        a.teth = env.index[t] || 0
+        a.teth = env.index[t] || 0           // objectify teth
         a.shld = pluck_hash(env.buff, (i += leng(t)))
         a.reqs = pluck_hash(env.buff, (i += leng(a.shld)))
         a.rigs = pluck_hash(env.buff, (i += leng(a.reqs)))
         a.carg = pluck_hash(env.buff, (i += leng(a.rigs)))
-    })
-    return env
-}
-
-function rigging_try(env) {
-    env.shapes[BODY].forEach(a => {
-        a.hoisting = []
+        a.hoisting = []                      // for consistency
         a.posts  = []
-        a.rigtrie = pairtrier(a.rigs, env)
+        a.rigtrie = pairtrier(a.rigs, env)   // trieify rigs
     })
     return env
 }
@@ -129,39 +122,39 @@ function twist_list(env) {
     env.shapes[TWIST].forEach(a => {
         let b = pluck_hash(env.buff, a.bin.cfirst)
         a.body = env.index[b] || 0
-        if(!a.body)
+        if(!a.body)                          // that's going to leave a mark
             return 0
-        a.prev = a.body.prev // conveniences
+        a.prev = a.body.prev                 // conveniences
         a.teth = a.body.teth
         a.hoisting = a.body.hoisting
         a.posts = a.body.posts
         a.succ = []
-        a.body.twist = a // NOTE: hack, could be multiples
-    })
-    return env
-}
-
-function get_hitched(env) {
-    env.shapes[BODY].forEach(a => {
-        if(!a.rigtrie) return 0
-        a.rigtrie.pairs.forEach(pair => {
-            let meet = env.index[pair[1]] // NOTE: this is a cheap hack
-            if(!meet) return 0
-            if(env.index[pair[0]])
-                return a.posts.push(meet) // NOTE: another cheap hack
-            let lead = fastprev(meet)
-            a.hoisting.push([lead, meet])
-            lead.leadhoist = a.twist
-            meet.meethoist = a.twist
-        })
+        a.body.twist = a                     // HACK: could be multiples
     })
     return env
 }
 
 function have_successors(env) {
-    env.shapes[TWIST].forEach(a => {
+    env.shapes[TWIST].forEach(a => {         // seperate phase so everything has .succ
         if(!a.prev) return 0
-        a.prev.succ.push(a)
+        a.prev.succ.push(a)                  // HACK: doesn't check legitimacy
+    })
+    return env
+}
+
+function get_hitched(env) {
+    env.shapes[BODY].forEach(a => {          // slurps out connections. cheats a lot.
+        if(!a.rigtrie) return 0
+        a.rigtrie.pairs.forEach(pair => {
+            let meet = env.index[pair[1]]    // HACK: doesn't check shield
+            if(!meet) return 0
+            if(env.index[pair[0]])
+                return a.posts.push(meet)    // HACK: doesn't check post
+            let lead = fastprev(meet)
+            a.hoisting.push([lead, meet])
+            lead.leadhoist = a.twist         // in edges for up direction
+            meet.meethoist = a.twist
+        })
     })
     return env
 }
@@ -171,7 +164,7 @@ function get_in_line(env) {
     env.shapes[TWIST].forEach(a => {
         [a.first, a.findex] = get_first(a)
         if(!a.findex)
-            env.firsts.push(a) // [a.first.hash] = {first: a.first} // , max_length: 1}
+            env.firsts.push(a)
     })
     return env
 }
@@ -383,7 +376,7 @@ function pluck_hash(b, s) {
 }
 
 function pluck_length(b, s) {
-    // 32 bit int... bigendian? need to specify this in the rig spec
+    // TODO: 32 bit int in bigendian format: need to specify this in the rig spec
     let v = new DataView(b, s, 4)
     return v.getUint32()
 }
@@ -416,35 +409,33 @@ function fastprev(twist) {
 
 function wrap(inn, f, out) {
     return env => {
-        let val = f(env[inn])
+        let val = f(env[inn])                // TODO: cope without inn&out
         let w = v => (env[out] = v) && env
         return val.constructor === Promise
-             ? val.then(w) // (v => w(v))            // fun made a promise
-             : w(val)
+             ? val.then(w) // (v => w(v))    // fun made a promise
+             : w(val)                        // TODO: promise back y'all
     }
-    // TODO: does this work for setTimeout and requestAnimationFrame? need to return a promise even if it didn't make one
-    // TODO: what if there's no out?
 }
 
-function pipe(...all_funs) {
+function pipe(...funs) {
   function magic_pipe(env={}) {
-    let fun, pc=0, funs = [...all_funs]
+    let fun, pc=0
 
     function inner() {
       fun = funs[pc++]
-      if(!fun) return 0
+      if(!fun) return 0                 // no fun
 
-      if(fun.async)                     // fun is async (non-promise)
+      if(fun.async)                     // async fun (non-promise)
         return new Promise(f => fun.async(env, f)).then(cb)
 
-      return cb(fun(env))               // fun is sync
+      return cb(fun(env))               // sync fun
     }
 
     function cb(new_env) {
       env = new_env                     // does something
 
       if(env && env.constructor === Promise)
-        return env.then(cb)            // fun made a promise
+        return env.then(cb)            // promise fun
 
       return inner()
     }
