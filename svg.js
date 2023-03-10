@@ -5,8 +5,6 @@
 // TODO:
 // clean up scooching
 // upload file (or pick an example?)
-// emoji/hex
-// rainbow sparkles
 // later:
 // highlight hitches
 // hash check
@@ -24,7 +22,7 @@ const BODY  = 49
 const el = document.getElementById.bind(document)
 const vp = el('viewport')
 
-let showpipe = pipe( wrap('name', import_file, 'buff')
+let showpipe = pipe( buff_to_env
                    , start_timer
                    , buff_to_rough
                    , untwist_bodies
@@ -42,14 +40,9 @@ let showpipe = pipe( wrap('name', import_file, 'buff')
                    , select_focus
                    )
 
-showpipe()
-
-function import_file(env) {
-    // return fetch('plain.toda')
-    return fetch('super.toda')
-    // return fetch('mega.toda')
-          .then(res => res.arrayBuffer())
-          .catch(err => console.log('oops')) // stop trying to make fetch happen
+function buff_to_env(buff) {
+    env = {buff, atoms:[], dupes:[], index:{}, shapes:{}, errors:[], firsts:[]}
+    return env
 }
 
 function start_timer(env) {
@@ -59,11 +52,6 @@ function start_timer(env) {
 
 function buff_to_rough(env) {
     let i = 0, b = env.buff, lb = b.byteLength
-    env.atoms = []                           // egregiously long env setup
-    env.dupes = []
-    env.index = {}
-    env.shapes = {}
-    env.errors = []
 
     while(i < lb) {
         // read values
@@ -157,7 +145,6 @@ function get_hitched(env) {
 }
 
 function get_in_line(env) {
-    env.firsts = []
     env.shapes[TWIST].forEach(a => {
         [a.first, a.findex] = get_first(a)
         if(!a.findex)
@@ -310,24 +297,36 @@ vp.addEventListener('mousemove', e => {
     }
 })
 
+el('todafile').onchange = function (t) {
+    let file = t.srcElement.files?.[0]
+    showpipe(file.arrayBuffer())
+}
+
+el('todaurl').onchange = function (e) {
+    return fetch(e.target.value)
+        .then(res => showpipe(res.arrayBuffer()))
+        .catch(err => console.log('oops')) // stop trying to make fetch happen
+}
+
 window.addEventListener('keydown', e => {
+    if(typeof env === 'undefined') return true
     let key = e.keyCode, id = document.getElementsByClassName('select')[0]?.id
     let t = env.index[id]                    // global env
-    if(!id || !t) return 0
-    if(key === 38)                           // up up
+    if (!id || !t) return 0
+    if (key === 38)                           // up up
         select_node(t.meethoist?.hash || t.leadhoist?.hash || t.posts[0]?.hash)
-    if(key === 40)                           // down down
+    if (key === 40)                           // down down
         select_node(t.hoisting[0]?.[0]?.hash)
-    if(key === 37)                           // left right
+    if (key === 37)                           // left right
         select_node(t.prev.hash)
-    if(key === 39)                           // left right
+    if (key === 39)                           // left right
         select_node(t.succ[0]?.hash)
 })
 
 function select_node(id) {
     let t = env.index[id], dom = el(id)      // global env
-    if(!t || !dom) return 0
-    ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
+    if (!t || !dom) return 0
+        ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
     dom.classList.add('select')
     let html = `<pre>${JSON.stringify(t, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
     el('select').innerHTML = hash_munge(html)
