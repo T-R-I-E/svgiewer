@@ -34,10 +34,10 @@ let showpipe = pipe( buff_to_env
                    , scooch_twists
                    , end_timer
                    , render_svg
+                   , select_focus
                    , write_stats
                    , probe
                    , setenv
-                   , select_focus
                    )
 
 function buff_to_env(buff) {
@@ -235,6 +235,13 @@ function render_svg(env) {
     return env
 }
 
+function select_focus(env) {
+    env.focus = env.shapes[TWIST][env.shapes[TWIST].length-1]
+    el(env.focus.hash).classList.add('focus')
+    select_node(env.focus.hash)
+    return env
+}
+
 function write_stats(env) {
     el('stats').innerHTML =
     `<p>Analyzed ${env.buff.byteLength.toLocaleString()} bytes
@@ -247,14 +254,8 @@ function write_stats(env) {
     </p>
     <p><a href="#" onclick="emojex()">emoji/hex</a> <a href="#" onclick="rainbowsparkles()">rainbow/sparkles</a></p>
     <div id="errors" class="hidden"><p>${hash_munge(env.errors.map(e=>e.message).join('</p><p>'))}</p></div>
+    <p>Focus: ${hash_munge('"'+env.focus.hash+'"')}</p>
     `
-    return env
-}
-
-function select_focus(env) {
-    let focus = env.shapes[TWIST][env.shapes[TWIST].length-1]
-    el(focus.hash).classList.add('focus')
-    select_node(focus.hash)
     return env
 }
 
@@ -345,7 +346,8 @@ function hash_munge(str) {                   // beautiful nonsense
 }
 
 function scroll_to(x, y) {
-    let MAGIC_CONSTANT = -2.2                // ¯\_(ツ)_/¯
+    let MAGIC_CONSTANT = -2                  // ¯\_(ツ)_/¯
+    // let MAGIC_CONSTANT = -2.2             // mysteriously, this value is needed when served from localhost
     vp.currentTranslate.x = MAGIC_CONSTANT * x * vp.currentScale + vp.clientWidth
     vp.currentTranslate.y = MAGIC_CONSTANT * y * vp.currentScale + vp.clientHeight
 }
