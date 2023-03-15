@@ -304,7 +304,7 @@ el('todafile').onchange = function (t) {
 }
 
 el('todaurl').onchange = function (e) {
-    let url = e.target.value.slice(1)
+    let url = e.target.value.trim()
     window.location.hash = url
     fetch_url(url)
 }
