@@ -239,6 +239,7 @@ function select_focus(env) {
     env.focus = env.shapes[TWIST][env.shapes[TWIST].length-1]
     el(env.focus.hash).classList.add('focus')
     select_node(env.focus.hash)
+    highlight_node(env.focus.hash)
     return env
 }
 
@@ -254,7 +255,6 @@ function write_stats(env) {
     </p>
     <p><a href="#" onclick="emojex()">emoji/hex</a> <a href="#" onclick="rainbowsparkles()">rainbow/sparkles</a></p>
     <div id="errors" class="hidden"><p>${hash_munge(env.errors.map(e=>e.message).join('</p><p>'))}</p></div>
-    <p>Focus: ${hash_munge('"'+env.focus.hash+'"')}</p>
     `
     return env
 }
@@ -304,7 +304,13 @@ el('todafile').onchange = function (t) {
 }
 
 el('todaurl').onchange = function (e) {
-    return fetch(e.target.value)
+    let url = e.target.value.slice(1)
+    window.location.hash = url
+    fetch_url(url)
+}
+
+function fetch_url(url) {
+    return fetch(url)
         .then(res => showpipe(res.arrayBuffer()))
         .catch(err => console.log('oops')) // stop trying to make fetch happen
 }
@@ -337,7 +343,8 @@ function select_node(id) {
 function highlight_node(id) {
     ;[...document.querySelectorAll('.highlight')].map(n => n.classList.remove('highlight'))
     el(id)?.classList?.add('highlight')
-    let html = `Highlight: "${id}"`
+    let html  = `<p>Focus: ${hash_munge('"'+env.focus.hash+'"')}</p>`
+        html += `<p>Highlight: "${id}"</p>`  // focus is here so it refreshes w/ emojihex
     el('highlight').innerHTML = hash_munge(html).replace(/onmouseover=".*?"/, '') // does not play well with onclick
 }
 
@@ -350,6 +357,7 @@ function scroll_to(x, y) {
     // let MAGIC_CONSTANT = -2.2             // mysteriously, this value is needed when served from localhost
     vp.currentTranslate.x = MAGIC_CONSTANT * x * vp.currentScale + vp.clientWidth
     vp.currentTranslate.y = MAGIC_CONSTANT * y * vp.currentScale + vp.clientHeight
+    console.log(x,y,vp.currentTranslate.x, vp.currentTranslate.y)
 }
 
 function showhide(id) {
@@ -491,3 +499,8 @@ function pipe(...funs) {
 
   return magic_pipe
 }
+
+// init
+let url = window.location.hash.slice(1)
+if(url)
+    fetch_url(url)

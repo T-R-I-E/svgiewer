@@ -6,8 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TODA File Explorer</title>
     <style>
+        #outer {
+            display: flex;
+            height: 100vh;
+        }
         svg {
             background-color: rgb(239, 255, 250);
+            flex-grow: 100;
         }
         circle {
             stroke: #000;
@@ -103,23 +108,24 @@
     </style>
 </head>
 <body>
-    <!-- dragon drops  -->
-    <svg id="viewport" style="width:500px; height:500px"></svg>
-    <div id="sidebar">
-        <h2>TODA File Analysis Tool</h2>
-        <p><em>For very serious use only</em></p>
-        <p>Arrows and click select, hover highlights, scroll zooms.
-            Highly experimental, results dubious.
-            <!-- <a href="">Source</a> -->
-        </p>
-        <p>
-            URL: <input type="text" id="todaurl" value="plain.toda" />
-            Upload: <input type="file" id="todafile" accept="" />
-        </p>
-        <div id="stats"></div>
-        <div id="highlight"></div>
-        <div id="select"></div>
+    <div id="outer">
+        <svg id="viewport"></svg>
+        <div id="sidebar">
+            <h2>TODA File Analysis Tool</h2>
+            <p><em>For very serious use only</em></p>
+            <p>Arrows and click select, hover highlights, scroll zooms.
+                Highly experimental, results dubious.
+                <!-- <a href="">Source</a> -->
+            </p>
+            <p>
+                URL: <input type="text" id="todaurl" value="plain.toda" />
+                Upload: <input type="file" id="todafile" accept="" />
+            </p>
+            <div id="stats"></div>
+            <div id="highlight"></div>
+            <div id="select"></div>
+        </div>
+        <script src="svg.js"></script>
     </div>
-    <script src="svg.js"></script>
 </body>
 </html>
