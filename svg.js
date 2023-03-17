@@ -32,6 +32,7 @@ let showpipe = pipe( buff_to_env
                    , get_in_line
                    , stack_lines
                    , scooch_twists
+                   , place_twists
                    , end_timer
                    , render_svg
                    , select_focus
@@ -109,9 +110,11 @@ function twist_list(env) {
             return 0
         a.prev = a.body.prev                 // conveniences
         a.teth = a.body.teth
-        a.hoisting = a.body.hoisting
         a.posts = a.body.posts
+        a.hoisting = a.body.hoisting
         a.succ = []
+        a.leadhoists = []
+        a.meethoists = []
         a.body.twist = a                     // HACK: could be multiples
     })
     return env
@@ -136,9 +139,10 @@ function get_hitched(env) {
             if(env.index[pair[0]])
                 return a.posts.push(meet)    // HACK: doesn't check post
             let lead = fastprev(meet)
+            if(!lead) return 0
             a.hoisting.push([lead, meet])
-            lead.leadhoist = a.twist         // in edges for up direction
-            meet.meethoist = a.twist
+            lead.leadhoists.push(a.twist)    // in edges for up direction
+            meet.meethoists.push(a.twist)
         })
     })
     return env
@@ -174,14 +178,22 @@ function stack_lines(env) {                  // one-pass line aligner, B- for sp
     return env
 }
 
+let mind = 20 // pronounced min-dee
 function scooch_twists(env) {
-    for(let i=env.firsts.length-1; i>=0; i--) {
-        let t = env.firsts[i]                // start at the top
-        while(t) {
+    walk_succ(env.firsts.at(-1), (t,i)=>t.x = i*20) // set xs for first line first
+    for(let i=env.firsts.length-2; i>=0; i--) {
+        walk_succ(env.firsts[i], t => {
             let tethx = t.teth?.x || 0       // these profligate defaults are grating
-            let postx = t.post?.x || 0
-            let leadx = t.leadhoist?.x || 0
+            let postx = t.post?.x || 0 // ACK: this doesn't do anything, .post is never set (and is an array anyway, re mutlihitchs)
+            t.minx = Math.max(tethx, postx)  // set minx&manx for each other line
+            t.manx = t.leadhoists[0]?.x || 0 // TODO: should be min not 0; also include meets ()
+
+            // actually just try it with a decent minx and manx (including posts and meethoists and leadhoists array max) -- might be fine as is
+
+            // fixme below here
+            let leadx = t.leadhoists[0]?.x || 0
             let right = Math.max(tethx, postx)
+
             if(leadx && right)               // grating and flawed
                 t.x = (leadx - right) / 2 + right
             else if(right)
@@ -194,14 +206,29 @@ function scooch_twists(env) {
             if(t.x < t.prev?.x)
                 t.x = t.prev.x + 20          // FIXME: breaks the leadx invariant
 
-            t.cx = 5 + t.x
-            t.cy = 400 - t.first.y * 30
-            t.colour = t.first.hash.slice(2, 8)
-            t = t.succ[0]
-        }
-        // TODO: set the xs deterministically, track the closest pair, and if there's too much overlap set a global that forces everything further apart... (even this might not be enough though, if there's jumps between levels -- may need up pressure)
+        })
+    // propagate upshove: if n twists are squeezed between < n twists, add spacing... to just the last one?
+    // shove twists apart by checking distance between two twists (by findex) -- though this will get weird when switching relays...
+    // then recursively shove things apart that are too close... check the "x units" to see if there's space to fit it in.
+    // set xs for other lines
     }
+    env.shapes[TWIST].forEach(t => {
+        t.cx = 5 + t.x
+        t.cy = 400 - t.first.y * 30
+        t.colour = t.first.hash.slice(2, 8)
+    })
     return env
+}
+
+function place_twists(env) {
+    return env
+}
+
+function walk_succ(t, f, i=0) {              // presumably f is effectful
+    while(t) {
+        f(t, i++)
+        t = t.succ[0]
+    }
 }
 
 function end_timer(env) {
@@ -312,7 +339,7 @@ el('todaurl').onchange = function (e) {
 function fetch_url(url) {
     return fetch(url)
         .then(res => showpipe(res.arrayBuffer()))
-        .catch(err => console.log('oops')) // stop trying to make fetch happen
+        .catch(err => console.log('e', err)) // stop trying to make fetch happen
 }
 
 window.addEventListener('keydown', e => {
@@ -320,13 +347,13 @@ window.addEventListener('keydown', e => {
     let key = e.keyCode, id = document.getElementsByClassName('select')[0]?.id
     let t = env.index[id]                    // global env
     if (!id || !t) return 0
-    if (key === 38)                           // up up
-        select_node(t.meethoist?.hash || t.leadhoist?.hash || t.posts[0]?.hash)
-    if (key === 40)                           // down down
+    if (key === 38)                          // up up
+        select_node(t.meethoists[0]?.hash || t.leadhoists[0]?.hash || t.posts[0]?.hash || t.teth?.hash)
+    if (key === 40)                          // down down
         select_node(t.hoisting[0]?.[0]?.hash)
-    if (key === 37)                           // left right
+    if (key === 37)                          // left right
         select_node(t.prev.hash)
-    if (key === 39)                           // left right
+    if (key === 39)                          // left right
         select_node(t.succ[0]?.hash)
 })
 
@@ -357,7 +384,6 @@ function scroll_to(x, y) {
     // let MAGIC_CONSTANT = -2.2             // mysteriously, this value is needed when served from localhost
     vp.currentTranslate.x = MAGIC_CONSTANT * x * vp.currentScale + vp.clientWidth
     vp.currentTranslate.y = MAGIC_CONSTANT * y * vp.currentScale + vp.clientHeight
-    console.log(x,y,vp.currentTranslate.x, vp.currentTranslate.y)
 }
 
 function showhide(id) {
@@ -502,5 +528,7 @@ function pipe(...funs) {
 
 // init
 let url = window.location.hash.slice(1)
-if(url)
+if(url) {
+    el('todaurl').value = url
     fetch_url(url)
+}
