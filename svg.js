@@ -179,20 +179,27 @@ function stack_lines(env) {                  // one-pass line aligner, B- for sp
 }
 
 let mind = 20 // pronounced min-dee
-function scooch_twists(env) {
-    walk_succ(env.firsts.at(-1), (t,i)=>t.x = i*20) // set xs for first line first
+function scooch_twists2(env) {
+    walk_succ(env.firsts.at(-1), (t)=>t.x = t.findex*20) // set xs for first line first
     for(let i=env.firsts.length-2; i>=0; i--) {
         walk_succ(env.firsts[i], t => {
-            let tethx = t.teth?.x || 0       // these profligate defaults are grating
-            let postx = t.post?.x || 0 // ACK: this doesn't do anything, .post is never set (and is an array anyway, re mutlihitchs)
+            let tethx = t.teth?.x || 0
+            let postx = t.posts.reduce((acc, x) => Math.max(acc, x.x), 0)
+            let leadx = t.leadhoists.reduce((acc, x) => Math.min(acc, x.x), Infinity)
+            let meetx = t.meethoists.reduce((acc, x) => Math.min(acc, x.x), Infinity)
+            // ?.x || 0 // ACK: this doesn't do anything, .post is never set (and is an array anyway, re mutlihitchs)
             t.minx = Math.max(tethx, postx)  // set minx&manx for each other line
-            t.manx = t.leadhoists[0]?.x || 0 // TODO: should be min not 0; also include meets ()
+            t.manx = Math.min(leadx, meetx)  // set minx&manx for each other line
+            // t.manx = t.leadhoists[0]?.x || 0 // TODO: should be min not 0; also include meets ()
 
             // actually just try it with a decent minx and manx (including posts and meethoists and leadhoists array max) -- might be fine as is
 
-            // fixme below here
-            let leadx = t.leadhoists[0]?.x || 0
-            let right = Math.max(tethx, postx)
+            // let leadx = t.leadhoists[0]?.x || 0
+            // let right = Math.max(tethx, postx)
+            let minx = t.posts.concat(tethx).reduce((acc, x) => Math.max(acc, x.x), 0)
+            let manx = t.leadhoists.concat(t.meethoists).reduce((acc, x) => Math.min(acc, x.x), Infinity)
+            leadx = manx
+            right = minx
 
             if(leadx && right)               // grating and flawed
                 t.x = (leadx - right) / 2 + right
@@ -220,16 +227,73 @@ function scooch_twists(env) {
     return env
 }
 
-function place_twists(env) {
+function scooch_twists(env) { // walk up from the bottom
+    env.firsts.forEach(f => {
+        let lastfast = 0
+        walk_succ(f, t => {
+            if(!t.teth) return 0
+            t.min = maxby(t.posts.concat(t.teth), (a, b) => a.findex < b.findex) || 0 // TODO: same line!
+            t.max = maxby(t.leadhoists.concat(t.meethoists), (a, b) => a.findex > b.findex) || 0 // TODO: same line!
+            if(lastfast && t.max) {
+                let myspace  = space(lastfast, t)
+                let youspace = space(lastfast.min, t.max)
+                if(myspace >= youspace - 1)
+                    t.max.scooch = t.max.scooch|0 + myspace - youspace + 2
+            // walk back: null -> stop, minx & manx & totesx (findex + scooch)
+            // TODO: minx & manx should be per line, not general: tweak this to deal w/ multiline situations
+            // TODO: offset rows by a half space
+            // keep a rolling tally of minx -> manx
+            // t3.minx === t4.minx, t3.manx === t4.manx => if space(t4.minx, t4.manx)<t3.minxdist then t4.scooch++
+            // space(t.min, t.max) < space(tback, t) -- tback is prev max tmin, and nothing happens if there's no local tmax -- just roll it forward...
+            // a is prev fast, b is current.
+            // a has already fixed itself wrt its fast pred... but what does that mean? is a at the beginning of its possible span, or the end?
+            // does it hurt to assume a is shoved against the right boundary?
+            // we're not really placing anything, we're just spacing.
+            // so ensure space(a.min, b.max) > space(a, b), or shove b.max over
+            }
+            lastfast = t
+        })
+    })
     return env
 }
 
-function walk_succ(t, f, i=0) {              // presumably f is effectful
+function place_twists(env) {
+    for(let i=env.firsts.length-1; i>=0; i--) { // other end
+        let x = 0 // i % 2 * (mind/2)
+        walk_succ(env.firsts[i], t => {
+            x += mind + (t.scooch|0) * mind
+            x = x < t.min?.x ? t.min.x + (mind/2) : x
+            t.x = x
+            t.cx = t.x // TODO: eliminate
+            t.cy = 400 - t.first.y * 30 // TODO: eliminate
+            t.colour = t.first.hash.slice(2, 8)
+        })
+    }
+    return env
+}
+
+function walk_succ(t, f) {              // presumably f is effectful
     while(t) {
-        f(t, i++)
+        f(t)
         t = t.succ[0]
     }
 }
+
+function maxby(xs, f) {                 // pick the winning wrt x
+    let acc = xs[0]
+    xs.forEach(x => acc = f(acc, x) ? x : acc)
+    return acc
+}
+
+function space(a, b) {
+    let t = b, s = 0
+    while(t && t != a) { // TODO: can maybe cache instead of walking?
+        s += t.scooch|0 + 1
+        t = t.prev
+    }
+    return s
+}
+
 
 function end_timer(env) {
     env.time.end = performance.now()
@@ -460,7 +524,7 @@ emojis = get_me_all_the_emoji()
 emhx = 1
 function get_me_all_the_emoji() {            // over-the-top emoji fetching courtesy of bogomoji
     let testCanvas = document.createElement("canvas")
-    let miniCtx = testCanvas.getContext('2d')
+    let miniCtx = testCanvas.getContext('2d', {willReadFrequently: true})
     let q = []
     let MAGICK_EMOJI_NUMBER = 127514
     for (let i = 0; i < 2000; i++) {
