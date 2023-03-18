@@ -2,10 +2,7 @@
 // TODA file view tool
 //
 
-// TODO:
-// clean up scooching
-// upload file (or pick an example?)
-// later:
+// TODO... maybe:
 // highlight hitches
 // hash check
 // shape check
@@ -14,13 +11,14 @@
 // rig check
 // make multi-successors a different size? (or a red ring?)
 // list other shapes
+// display body (abjectify?)
 
 
-
-const TWIST = 48
+const TWIST = 48                             // SHAPES
 const BODY  = 49
 const el = document.getElementById.bind(document)
-const vp = el('viewport')
+const vp = el('viewport')                    // svg canvas
+const mind = 20                              // pronounced min-dee
 
 let showpipe = pipe( buff_to_env
                    , start_timer
@@ -178,78 +176,18 @@ function stack_lines(env) {                  // one-pass line aligner, B- for sp
     return env
 }
 
-let mind = 20 // pronounced min-dee
-function scooch_twists2(env) {
-    walk_succ(env.firsts.at(-1), (t)=>t.x = t.findex*20) // set xs for first line first
-    for(let i=env.firsts.length-2; i>=0; i--) {
-        walk_succ(env.firsts[i], t => {
-            let tethx = t.teth?.x || 0
-            let postx = t.posts.reduce((acc, x) => Math.max(acc, x.x), 0)
-            let leadx = t.leadhoists.reduce((acc, x) => Math.min(acc, x.x), Infinity)
-            let meetx = t.meethoists.reduce((acc, x) => Math.min(acc, x.x), Infinity)
-            // ?.x || 0 // ACK: this doesn't do anything, .post is never set (and is an array anyway, re mutlihitchs)
-            t.minx = Math.max(tethx, postx)  // set minx&manx for each other line
-            t.manx = Math.min(leadx, meetx)  // set minx&manx for each other line
-            // t.manx = t.leadhoists[0]?.x || 0 // TODO: should be min not 0; also include meets ()
-
-            // actually just try it with a decent minx and manx (including posts and meethoists and leadhoists array max) -- might be fine as is
-
-            // let leadx = t.leadhoists[0]?.x || 0
-            // let right = Math.max(tethx, postx)
-            let minx = t.posts.concat(tethx).reduce((acc, x) => Math.max(acc, x.x), 0)
-            let manx = t.leadhoists.concat(t.meethoists).reduce((acc, x) => Math.min(acc, x.x), Infinity)
-            leadx = manx
-            right = minx
-
-            if(leadx && right)               // grating and flawed
-                t.x = (leadx - right) / 2 + right
-            else if(right)
-                t.x = right + 10
-            else if(leadx)
-                t.x = leadx - 10
-            else
-                t.x = t.findex * 20
-
-            if(t.x < t.prev?.x)
-                t.x = t.prev.x + 20          // FIXME: breaks the leadx invariant
-
-        })
-    // propagate upshove: if n twists are squeezed between < n twists, add spacing... to just the last one?
-    // shove twists apart by checking distance between two twists (by findex) -- though this will get weird when switching relays...
-    // then recursively shove things apart that are too close... check the "x units" to see if there's space to fit it in.
-    // set xs for other lines
-    }
-    env.shapes[TWIST].forEach(t => {
-        t.cx = 5 + t.x
-        t.cy = 400 - t.first.y * 30
-        t.colour = t.first.hash.slice(2, 8)
-    })
-    return env
-}
 
 function scooch_twists(env) { // walk up from the bottom
     env.firsts.forEach(f => {
         let lastfast = 0
         walk_succ(f, t => {
-            if(!t.teth) return 0
-            t.min = maxby(t.posts.concat(t.teth), (a, b) => a.findex < b.findex) || 0 // TODO: same line!
+            t.min = maxby(t.posts.concat(t.teth || {}), (a, b) => a.findex < b.findex) || 0 // TODO: same line!
             t.max = maxby(t.leadhoists.concat(t.meethoists), (a, b) => a.findex > b.findex) || 0 // TODO: same line!
             if(lastfast && t.max) {
                 let myspace  = space(lastfast, t)
                 let youspace = space(lastfast.min, t.max)
-                if(myspace >= youspace - 1)
-                    t.max.scooch = t.max.scooch|0 + myspace - youspace + 2
-            // walk back: null -> stop, minx & manx & totesx (findex + scooch)
-            // TODO: minx & manx should be per line, not general: tweak this to deal w/ multiline situations
-            // TODO: offset rows by a half space
-            // keep a rolling tally of minx -> manx
-            // t3.minx === t4.minx, t3.manx === t4.manx => if space(t4.minx, t4.manx)<t3.minxdist then t4.scooch++
-            // space(t.min, t.max) < space(tback, t) -- tback is prev max tmin, and nothing happens if there's no local tmax -- just roll it forward...
-            // a is prev fast, b is current.
-            // a has already fixed itself wrt its fast pred... but what does that mean? is a at the beginning of its possible span, or the end?
-            // does it hurt to assume a is shoved against the right boundary?
-            // we're not really placing anything, we're just spacing.
-            // so ensure space(a.min, b.max) > space(a, b), or shove b.max over
+                if(myspace >= youspace)
+                    t.max.scooch = t.max.scooch|0 + myspace - youspace + 1
             }
             lastfast = t
         })
@@ -267,6 +205,8 @@ function place_twists(env) {
             t.cx = t.x // TODO: eliminate
             t.cy = 400 - t.first.y * 30 // TODO: eliminate
             t.colour = t.first.hash.slice(2, 8)
+            // if(t.prev) // try to scoot prev closer...
+            //     t.prev.x = Math.max(t.prev.x, Math.min((t.prev.max.x - mind/2)||Infinity, t.x - (t.scooch|0)*mind + mind))
         })
     }
     return env
@@ -288,7 +228,7 @@ function maxby(xs, f) {                 // pick the winning wrt x
 function space(a, b) {
     let t = b, s = 0
     while(t && t != a) { // TODO: can maybe cache instead of walking?
-        s += t.scooch|0 + 1
+        s += (t.scooch|0) + 1
         t = t.prev
     }
     return s
