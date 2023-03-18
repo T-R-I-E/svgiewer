@@ -3,6 +3,9 @@
 //
 
 // TODO... maybe:
+// svg controls
+// default example file
+// better arrows... go up and down even if you're stuck?
 // highlight hitches
 // hash check
 // shape check
@@ -18,7 +21,6 @@ const TWIST = 48                             // SHAPES
 const BODY  = 49
 const el = document.getElementById.bind(document)
 const vp = el('viewport')                    // svg canvas
-const mind = 20                              // pronounced min-dee
 
 let showpipe = pipe( buff_to_env
                    , start_timer
@@ -172,12 +174,13 @@ function stack_lines(env) {                  // one-pass line aligner, B- for sp
         if(min_tether < t.y)                 // move lines under their lowest tether
             t.y = +((min_tether + "").slice(0,-1) + "0" + (i+1))
     })
+    console.log(env.firsts.map(t=>t.y))
     env.firsts.sort((a,b) => a.y - b.y).forEach((t,i) => t.y = i)
     return env
 }
 
 
-function scooch_twists(env) { // walk up from the bottom
+function scooch_twists(env) {                // walk up from the bottom
     env.firsts.forEach(f => {
         let prevfast = 0
         walk_succ(f, t => {
@@ -195,12 +198,13 @@ function scooch_twists(env) { // walk up from the bottom
     return env
 }
 
-function place_twists(env) {
-    for(let i=env.firsts.length-1; i>=0; i--) { // other end
-        let x = 0 // i % 2 * (mind/2)
+function place_twists(env) {                 // walk down from the top
+    const mind = 20                          // pronounced min-dee
+    for(let i=env.firsts.length-1; i>=0; i--) {
+        let x = 0
         walk_succ(env.firsts[i], t => {
             x += mind + (t.scooch|0) * mind
-            t.cx = t.x = x <= t.min?.x ? t.min.x + (mind/2) : x
+            t.cx = t.x = x = x <= t.min?.x ? t.min.x + (mind/2) : x
             t.cy = 400 - t.first.y * 30
             t.colour = t.first.hash.slice(2, 8)
         })
@@ -208,25 +212,14 @@ function place_twists(env) {
     return env
 }
 
-function scoot_twists(env) {
-    for(let i=env.firsts.length-1; i>=0; i--) {
-        let x = 0
-        walk_succ(env.firsts[i], t => { // TODO: walk_prev
-            // if(t.prev) // try to scoot prev closer...
-            //     t.prev.x = Math.max(t.prev.x, Math.min((t.prev.max.x - mind/2)||Infinity, t.x - (t.scooch|0)*mind + mind))
-        })
-    }
-    return env
-}
-
-function walk_succ(t, f) {              // presumably f is effectful
+function walk_succ(t, f) {                   // presumably f is effectful
     while(t) {
         f(t)
         t = t.succ[0]
     }
 }
 
-function maxby(xs, f) {                 // pick the winning wrt x
+function maxby(xs, f) {                      // pick the winning wrt x
     let acc = xs[0]
     xs.forEach(x => acc = f(acc, x) ? x : acc)
     return acc
@@ -234,7 +227,7 @@ function maxby(xs, f) {                 // pick the winning wrt x
 
 function space(a, b) {
     let t = b, s = 0
-    while(t && t != a) { // TODO: can maybe cache instead of walking?
+    while(t && t != a) {                     // TODO: can maybe cache instead of walking?
         s += (t.scooch|0) + 1
         t = t.prev
     }
