@@ -35,8 +35,8 @@ let showpipe = pipe( buff_to_env
                    , render_svg
                    , select_focus
                    , write_stats
-                   , probe
                    , setenv
+             //    , probe
                    )
 
 function buff_to_env(buff) {
@@ -179,17 +179,17 @@ function stack_lines(env) {                  // one-pass line aligner, B- for sp
 
 function scooch_twists(env) { // walk up from the bottom
     env.firsts.forEach(f => {
-        let lastfast = 0
+        let prevfast = 0
         walk_succ(f, t => {
             t.min = maxby(t.posts.concat(t.teth || {}), (a, b) => a.findex < b.findex) || 0 // TODO: same line!
             t.max = maxby(t.leadhoists.concat(t.meethoists), (a, b) => a.findex > b.findex) || 0 // TODO: same line!
-            if(lastfast && t.max) {
-                let myspace  = space(lastfast, t)
-                let youspace = space(lastfast.min, t.max)
+            if(prevfast && t.max) {
+                let myspace  = space(prevfast, t)
+                let youspace = space(prevfast.min, t.max)
                 if(myspace >= youspace)
                     t.max.scooch = t.max.scooch|0 + myspace - youspace + 1
             }
-            lastfast = t
+            prevfast = t
         })
     })
     return env
@@ -200,11 +200,18 @@ function place_twists(env) {
         let x = 0 // i % 2 * (mind/2)
         walk_succ(env.firsts[i], t => {
             x += mind + (t.scooch|0) * mind
-            x = x < t.min?.x ? t.min.x + (mind/2) : x
-            t.x = x
-            t.cx = t.x // TODO: eliminate
-            t.cy = 400 - t.first.y * 30 // TODO: eliminate
+            t.cx = t.x = x <= t.min?.x ? t.min.x + (mind/2) : x
+            t.cy = 400 - t.first.y * 30
             t.colour = t.first.hash.slice(2, 8)
+        })
+    }
+    return env
+}
+
+function scoot_twists(env) {
+    for(let i=env.firsts.length-1; i>=0; i--) {
+        let x = 0
+        walk_succ(env.firsts[i], t => { // TODO: walk_prev
             // if(t.prev) // try to scoot prev closer...
             //     t.prev.x = Math.max(t.prev.x, Math.min((t.prev.max.x - mind/2)||Infinity, t.x - (t.scooch|0)*mind + mind))
         })
@@ -260,7 +267,8 @@ function render_svg(env) {
     edges.reverse().forEach(e => {           // prev and teth at back for style
         let fx = e[0].cx, fy = e[0].cy, tx = e[1].cx, ty = e[1].cy
         if(!(fx && fy && tx && ty)) return 0 // also eq successor
-        edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" fill="none" class="${e[2]}"/>`
+        let dashed = e[0].cx < e[1].cx ? 'dashed' : ''
+        edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" fill="none" class="${e[2]} ${dashed}"/>`
     })
     vp.innerHTML = '<g id="gtag">' + edgestr + svgs + '</g>'
     return env
