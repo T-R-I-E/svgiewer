@@ -30,9 +30,13 @@ let showpipe = pipe( buff_to_env
                    , have_successors
                    , get_hitched
                    , get_in_line
+                   , y_the_first_man
                    , stack_lines
-                   , scooch_twists
-                   , place_twists
+                   , stack_lines             // second time's the charm
+                   , plonk_twists
+                   , decorate_twists
+                //    , scooch_twists
+                //    , place_twists
                    , end_timer
                    , render_svg
                    , select_focus
@@ -135,7 +139,7 @@ function get_hitched(env) {
         if(!a.rigtrie) return 0
         a.rigtrie.pairs.forEach(pair => {
             let meet = env.index[pair[1]]    // HACK: doesn't check hoist
-            if(!meet) return 0
+            if(!meet || meet.shape != TWIST) return 0
             if(env.index[pair[0]])
                 return a.posts.push(meet)    // HACK: doesn't check post
             let lead = fastprev(meet)
@@ -166,16 +170,46 @@ function get_first(a) {
         return (([a,b])=>[a,b+1])(get_first(a.prev))
 }
 
-function stack_lines(env) {                  // one-pass line aligner, B- for spools
+function y_the_first_man(env) {
     env.firsts.forEach((t,i) => t.y = i+1.5) // .5 for the atrocious ordering hack
+    return env
+}
+
+function stack_lines(env) {                  // one-pass line aligner, B- for spools
     env.firsts.forEach((t,i) => {
         let min_tether = env.shapes[TWIST].filter(a=>a.first === t)
                             .reduce((acc, a) => Math.min(acc, a.teth?.first?.y||Infinity), Infinity)
         if(min_tether < t.y)                 // move lines under their lowest tether
             t.y = +((min_tether + "").slice(0,-1) + "0" + (i+1))
     })
-    console.log(env.firsts.map(t=>t.y))
-    env.firsts.sort((a,b) => a.y - b.y).forEach((t,i) => t.y = i)
+    console.log(env.firsts.map(t=>[t.hash.slice(-3), t.y]).join(' : '))
+    env.firsts.sort((a,b) => a.y - b.y).forEach((t,i) => t.y = i + .5)
+    return env
+}
+
+
+function plonk_twists(env) {
+    let x = 0, gas = 10000, mind = 20
+    let lines = env.firsts.slice().reverse()
+    while(lines.length) {                    // rules: teth + posts + hoisting all required before plonking
+        lines = lines.map(t => {
+            if((gas-- <= 0) || ((!t.teth || t.teth.x) && t.posts.every(t=>t.x) && t.hoisting.every(([t,u]) => t.x && u.x))) {
+                x += mind
+                t.x = x
+                t = t.succ[0]
+            }
+            return t
+        }).filter(t => t)
+    }
+    return env
+}
+
+function decorate_twists(env) {
+    env.shapes[TWIST].forEach(t => {
+        t.cx = t.x
+        t.cy = 400 - t.first.y * 30
+        t.colour = t.first.hash.slice(2, 8)
+    })
     return env
 }
 
@@ -192,7 +226,8 @@ function scooch_twists(env) {                // walk up from the bottom
                 if(myspace >= youspace)
                     t.max.scooch = t.max.scooch|0 + myspace - youspace + 1
             }
-            prevfast = t
+            if(t.teth)
+                prevfast = t
         })
     })
     return env
@@ -212,6 +247,13 @@ function place_twists(env) {                 // walk down from the top
     return env
 }
 
+function smoosh_twists(env) {
+    // move it to the right as far as we can without breaking *downward* invariants
+    // and also fix
+    return env
+}
+
+
 function walk_succ(t, f) {                   // presumably f is effectful
     while(t) {
         f(t)
@@ -219,7 +261,7 @@ function walk_succ(t, f) {                   // presumably f is effectful
     }
 }
 
-function maxby(xs, f) {                      // pick the winning wrt x
+function maxby(xs, f) {                      // pick the winning x wrt f
     let acc = xs[0]
     xs.forEach(x => acc = f(acc, x) ? x : acc)
     return acc
