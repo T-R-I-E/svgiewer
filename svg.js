@@ -194,8 +194,7 @@ function plonk_twists(env) {
     while(lines.length) {                    // rules: teth + posts + hoisting all required before plonking
         lines = lines.map(t => {
             if((gas-- <= 0) || ((!t.teth || t.teth.x) && t.posts.every(t=>t.x) && t.hoisting.every(([t,u]) => t.x && u.x))) {
-                x += mind
-                t.x = x
+                t.x = x += mind
                 t = t.succ[0]
             }
             return t
@@ -212,70 +211,6 @@ function decorate_twists(env) {
     })
     return env
 }
-
-
-function scooch_twists(env) {                // walk up from the bottom
-    env.firsts.forEach(f => {
-        let prevfast = 0
-        walk_succ(f, t => {
-            t.min = maxby(t.posts.concat(t.teth || {}), (a, b) => a.findex < b.findex) || 0 // TODO: same line!
-            t.max = maxby(t.leadhoists.concat(t.meethoists), (a, b) => a.findex > b.findex) || 0 // TODO: same line!
-            if(prevfast && t.max) {
-                let myspace  = space(prevfast, t)
-                let youspace = space(prevfast.min, t.max)
-                if(myspace >= youspace)
-                    t.max.scooch = t.max.scooch|0 + myspace - youspace + 1
-            }
-            if(t.teth)
-                prevfast = t
-        })
-    })
-    return env
-}
-
-function place_twists(env) {                 // walk down from the top
-    const mind = 20                          // pronounced min-dee
-    for(let i=env.firsts.length-1; i>=0; i--) {
-        let x = 0
-        walk_succ(env.firsts[i], t => {
-            x += mind + (t.scooch|0) * mind
-            t.cx = t.x = x = x <= t.min?.x ? t.min.x + (mind/2) : x
-            t.cy = 400 - t.first.y * 30
-            t.colour = t.first.hash.slice(2, 8)
-        })
-    }
-    return env
-}
-
-function smoosh_twists(env) {
-    // move it to the right as far as we can without breaking *downward* invariants
-    // and also fix
-    return env
-}
-
-
-function walk_succ(t, f) {                   // presumably f is effectful
-    while(t) {
-        f(t)
-        t = t.succ[0]
-    }
-}
-
-function maxby(xs, f) {                      // pick the winning x wrt f
-    let acc = xs[0]
-    xs.forEach(x => acc = f(acc, x) ? x : acc)
-    return acc
-}
-
-function space(a, b) {
-    let t = b, s = 0
-    while(t && t != a) {                     // TODO: can maybe cache instead of walking?
-        s += (t.scooch|0) + 1
-        t = t.prev
-    }
-    return s
-}
-
 
 function end_timer(env) {
     env.time.end = performance.now()
