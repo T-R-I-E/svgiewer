@@ -1,9 +1,14 @@
-//
-// TODA file view tool
-//
+// ______    _________
+// / ___/ |  / / ____(_)__ _      _____  _____
+// \__ \| | / / / __/ / _ \ | /| / / _ \/ ___/
+// ___/ /| |/ / /_/ / /  __/ |/ |/ /  __/ /
+// /____/ |___/\____/_/\___/|__/|__/\___/_/
+
+// A TODA file view tool
+
 
 // TODO... maybe:
-// svg controls
+// svg controls (matrix transform instead of currentTranslate)
 // default example file
 // better arrows... go up and down even if you're stuck?
 // highlight hitches
@@ -30,19 +35,16 @@ let showpipe = pipe( buff_to_env
                    , have_successors
                    , get_hitched
                    , get_in_line
-                   , y_the_first_man
+                   , y_the_first_twist
                    , stack_lines
                    , stack_lines             // second time's the charm
                    , plonk_twists
                    , decorate_twists
-                //    , scooch_twists
-                //    , place_twists
                    , end_timer
                    , render_svg
                    , select_focus
                    , write_stats
                    , setenv
-             //    , probe
                    )
 
 function buff_to_env(buff) {
@@ -170,7 +172,7 @@ function get_first(a) {
         return (([a,b])=>[a,b+1])(get_first(a.prev))
 }
 
-function y_the_first_man(env) {
+function y_the_first_twist(env) {
     env.firsts.forEach((t,i) => t.y = i+1.5) // .5 for the atrocious ordering hack
     return env
 }
