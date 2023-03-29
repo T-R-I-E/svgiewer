@@ -21,11 +21,11 @@
 // list other shapes
 // display body (abjectify?)
 
-
 const TWIST = 48                             // SHAPES
 const BODY  = 49
 const el = document.getElementById.bind(document)
 const vp = el('viewport')                    // svg canvas
+let env = {}
 
 let showpipe = pipe( buff_to_env
                    , start_timer
@@ -45,6 +45,8 @@ let showpipe = pipe( buff_to_env
                    , select_focus
                    , write_stats
                    , setenv
+                   , pause
+                   , check_hitches
                    )
 
 function buff_to_env(buff) {
@@ -240,7 +242,7 @@ function render_svg(env) {
         let fx = e[0].cx, fy = e[0].cy, tx = e[1].cx, ty = e[1].cy
         if(!(fx && fy && tx && ty)) return 0 // also eq successor
         let dashed = e[0].cx < e[1].cx ? 'dashed' : ''
-        edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" fill="none" class="${e[2]} ${dashed}"/>`
+        edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" class="${e[2]} ${dashed}"/>`
     })
     vp.innerHTML = '<g id="gtag">' + edgestr + svgs + '</g>'
     return env
@@ -279,6 +281,147 @@ function setenv(x) {
     env = x                                  // make a global for DOM consumption
     return env                               // ^ kind of a hack but pipe is async
 }
+
+function pause(env) {
+    return new Promise(k => setTimeout(() => k(env), 0))
+}
+
+function check_hitches(env) {
+    //
+    return env
+}
+
+
+// helpers
+
+let hexes = hexes_helper()
+function hexes_helper() {
+    return Array.from(Array(256)).map((n,i)=>i.toString(16).padStart(2, '0'))
+}
+
+function pluck_hex(b, s, l) {                // requires hexes helper
+    let hex = ''
+    let uints = new Uint8Array(b, s, l)      // OPT: 72ms
+    for(let i=0; i<l; i++)                   // OPT: 53ms
+        hex += hexes[uints[i]]               // OPT: 144ms
+    return hex
+}
+
+function pluck_hash(b, s) {
+    let l = 0, ha = pluck_hex(b, s, 1)
+    if(ha === '41')
+        l = 32
+    else
+        return 0
+    return ha + pluck_hex(b, s + 1, l)
+}
+
+function pluck_length(b, s) {
+    let v = new DataView(b, s, 4)            // 32 bit bigendian int
+    return v.getUint32()
+}
+
+function leng(h) {
+    return h ? h.length/2 : 1                // byte length from hex or 0
+}
+
+function pairtrier(h, env) {
+    let trie = env.index[h]
+    if(!trie) return 0
+    if(trie.shape !== '63') return 0         // don't try to trie a non-trie tree
+    trie.pairs = []
+    for(let i = trie.bin.cfirst; i < trie.bin.last;) {
+        let k = pluck_hash(env.buff, i)
+        i += leng(k)
+        let v = pluck_hash(env.buff, i)
+        i += leng(v)
+        trie.pairs.push([k, v])
+    }
+    return trie
+}
+
+function fastprev(twist) {
+    if(!twist.prev) return 0
+    if(twist.prev.teth)
+        return twist.prev
+    return fastprev(twist.prev)
+}
+
+function rainbowsparkles() {
+    ;[...document.querySelectorAll('path')].map(p=>p.classList.toggle('rainbowsparkles'))
+    ;[...document.querySelectorAll('circle')].map(p=>p.classList.toggle('nodesparkles'))
+}
+
+let emojis = get_me_all_the_emoji()
+let emhx = 1
+function get_me_all_the_emoji() {            // over-the-top emoji fetching courtesy of bogomoji
+    let testCanvas = document.createElement("canvas")
+    let miniCtx = testCanvas.getContext('2d', {willReadFrequently: true})
+    let q = []
+    let MAGICK_EMOJI_NUMBER = 127514
+    for (let i = 0; i < 2000; i++) {
+        let char = String.fromCodePoint(MAGICK_EMOJI_NUMBER + i)
+        if (is_char_emoji(miniCtx, char))
+            q.push(char)
+    }
+    return q
+}
+function is_char_emoji(ctx, char) {
+    let size = ctx.measureText(char).width
+    if (!size) return false
+    ctx.clearRect(0, 0, size + 3, size + 3)  // three is a lucky number
+    ctx.fillText(char, 0, size)              // probably chops off the emoji edges
+    let data = ctx.getImageData(0, 0, size, size).data
+    for (var i = data.length - 4; i >= 0; i -= 4)
+        if (!is_colour_boring(data[i], data[i + 1], data[i + 2]))
+            return true
+    return false
+}
+function is_colour_boring(r, g, b) {         // if the pixel is not black, white, or red,
+    let s = r + g + b                        // then it probably belongs to an emoji
+    return (!s || s === 765 || s === 255 && s === r)
+}
+
+
+function wrap(inn, f, out) {
+    return env => {
+        let val = f(env[inn])                // TODO: cope without inn&out
+        let w = v => (env[out] = v) && env
+        return val.constructor === Promise
+             ? val.then(w)                   // fun made a promise
+             : w(val)                        // TODO: promise back y'all
+    }
+}
+
+function pipe(...funs) {
+  function magic_pipe(env={}) {
+    let fun, pc=0
+
+    function inner() {
+      fun = funs[pc++]
+      if(!fun) return 0                      // no fun
+
+      if(fun.async)                          // async fun (non-promise)
+        return new Promise(f => fun.async(env, f)).then(cb)
+
+      return cb(fun(env))                    // sync fun
+    }
+
+    function cb(new_env) {
+      env = new_env                          // does something
+
+      if(env && env.constructor === Promise)
+        return env.then(cb)                  // promise fun
+
+      return inner()
+    }
+
+    return cb(env)
+  }
+
+  return magic_pipe
+}
+
 
 // DOM things
 
@@ -360,7 +503,9 @@ function highlight_node(id) {
 }
 
 function hash_munge(str) {                   // beautiful nonsense
-    return str.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"').replaceAll(/>41(.*?)</g, (m,p) => emhx ? `>41${p}<` : `>${p.match(/.{1,11}/g).map(n=>emojis[parseInt(n,16)%emojis.length]).join('')}<`)
+    return str.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"')
+              .replaceAll(/>41(.*?)</g, (m,p) => emhx ? `>41${p}<` : `>${p.match(/.{1,11}/g).map(n=>emojis[parseInt(n,16)%emojis.length])
+              .join('')}<`)
 }
 
 function scroll_to(x, y) {
@@ -380,135 +525,6 @@ function emojex() {
     highlight_node(document.getElementsByClassName('highlight')[0]?.id)
 }
 
-// helpers
-
-let hexes = hexes_helper()
-function hexes_helper() {
-    return Array.from(Array(256)).map((n,i)=>i.toString(16).padStart(2, '0'))
-}
-
-function pluck_hex(b, s, l) {                // requires hexes helper
-    let hex = ''
-    let uints = new Uint8Array(b, s, l)      // OPT: 72ms
-    for(i=0; i<l; i++)                       // OPT: 53ms
-        hex += hexes[uints[i]]               // OPT: 144ms
-    return hex
-}
-
-function pluck_hash(b, s) {
-    let l = 0, ha = pluck_hex(b, s, 1)
-    if(ha === '41')
-        l = 32
-    else
-        return 0
-    return ha + pluck_hex(b, s + 1, l)
-}
-
-function pluck_length(b, s) {
-    let v = new DataView(b, s, 4)            // 32 bit bigendian int
-    return v.getUint32()
-}
-
-function leng(h) {
-    return h ? h.length/2 : 1                // byte length from hex or 0
-}
-
-function pairtrier(h, env) {
-    let trie = env.index[h]
-    if(!trie) return 0
-    if(trie.shape !== '63') return 0         // don't try to trie a non-trie tree
-    trie.pairs = []
-    for(let i = trie.bin.cfirst; i < trie.bin.last;) {
-        let k = pluck_hash(env.buff, i)
-        i += leng(k)
-        let v = pluck_hash(env.buff, i)
-        i += leng(v)
-        trie.pairs.push([k, v])
-    }
-    return trie
-}
-
-function fastprev(twist) {
-    if(!twist.prev) return 0
-    if(twist.prev.teth)
-        return twist.prev
-    return fastprev(twist.prev)
-}
-
-function rainbowsparkles() {
-    ;[...document.querySelectorAll('path')].map(p=>p.classList.toggle('rainbowsparkles'))
-    ;[...document.querySelectorAll('circle')].map(p=>p.classList.toggle('nodesparkles'))
-}
-
-emojis = get_me_all_the_emoji()
-emhx = 1
-function get_me_all_the_emoji() {            // over-the-top emoji fetching courtesy of bogomoji
-    let testCanvas = document.createElement("canvas")
-    let miniCtx = testCanvas.getContext('2d', {willReadFrequently: true})
-    let q = []
-    let MAGICK_EMOJI_NUMBER = 127514
-    for (let i = 0; i < 2000; i++) {
-        let char = String.fromCodePoint(MAGICK_EMOJI_NUMBER + i)
-        if (is_char_emoji(miniCtx, char))
-            q.push(char)
-    }
-    return q
-}
-function is_char_emoji(ctx, char) {
-    let size = ctx.measureText(char).width
-    if (!size) return false
-    ctx.clearRect(0, 0, size + 3, size + 3)  // three is a lucky number
-    ctx.fillText(char, 0, size)              // probably chops off the emoji edges
-    let data = ctx.getImageData(0, 0, size, size).data
-    for (var i = data.length - 4; i >= 0; i -= 4)
-        if (!is_colour_boring(data[i], data[i + 1], data[i + 2]))
-            return true
-    return false
-}
-function is_colour_boring(r, g, b) {         // if the pixel is not black, white, or red,
-    let s = r + g + b                        // then it probably belongs to an emoji
-    return (!s || s === 765 || s === 255 && s === r)
-}
-
-
-function wrap(inn, f, out) {
-    return env => {
-        let val = f(env[inn])                // TODO: cope without inn&out
-        let w = v => (env[out] = v) && env
-        return val.constructor === Promise
-             ? val.then(w)                   // fun made a promise
-             : w(val)                        // TODO: promise back y'all
-    }
-}
-
-function pipe(...funs) {
-  function magic_pipe(env={}) {
-    let fun, pc=0
-
-    function inner() {
-      fun = funs[pc++]
-      if(!fun) return 0                      // no fun
-
-      if(fun.async)                          // async fun (non-promise)
-        return new Promise(f => fun.async(env, f)).then(cb)
-
-      return cb(fun(env))                    // sync fun
-    }
-
-    function cb(new_env) {
-      env = new_env                          // does something
-
-      if(env && env.constructor === Promise)
-        return env.then(cb)                  // promise fun
-
-      return inner()
-    }
-
-    return cb(env)
-  }
-
-  return magic_pipe
-}
 
 // init
 let url = window.location.hash.slice(1)
