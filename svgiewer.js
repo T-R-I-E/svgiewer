@@ -472,7 +472,7 @@ function fetch_url(url) {
 window.addEventListener('keydown', e => {
     if(typeof env === 'undefined') return true
     let key = e.keyCode, id = document.getElementsByClassName('select')[0]?.id
-    let t = env.index[id]                    // global env
+    let t = env.index?.[id]                  // global env
     if (!id || !t) return 0
     if (key === 38)                          // up up
         select_node(t.meethoists[0]?.hash || t.leadhoists[0]?.hash || t.posts[0]?.hash || t.teth?.hash)
@@ -485,7 +485,7 @@ window.addEventListener('keydown', e => {
 })
 
 function select_node(id) {
-    let t = env.index[id], dom = el(id)      // global env
+    let t = env.index?.[id], dom = el(id)    // global env
     if (!t || !dom) return 0
         ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
     dom.classList.add('select')
