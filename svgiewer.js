@@ -1,8 +1,8 @@
-// ______    _________
+//  ______    _________
 // / ___/ |  / / ____(_)__ _      _____  _____
 // \__ \| | / / / __/ / _ \ | /| / / _ \/ ___/
-// ___/ /| |/ / /_/ / /  __/ |/ |/ /  __/ /
-// /____/ |___/\____/_/\___/|__/|__/\___/_/
+//___/ /| |/ / /_/ / /  __/ |/ |/ /  __/ /
+//____/ |___/\____/_/\___/|__/|__/\___/_/
 
 // A TODA file view tool
 
@@ -21,11 +21,17 @@
 // list other shapes
 // display body (abjectify?)
 
+import {DQ} from "../../src/abject/quantity.js"
+import { Abject } from "./src/abject/abject.js"
+import { Twist } from "./src/core/twist.js"
+
 const TWIST = 48                             // SHAPES
 const BODY  = 49
 const el = document.getElementById.bind(document)
 const vp = el('viewport')                    // svg canvas
 let env = {}
+let emojis = null
+let emhx = 1
 
 let showpipe = pipe( buff_to_env
                    , start_timer
@@ -287,7 +293,15 @@ function pause(env) {
 }
 
 function check_hitches(env) {
-    //
+    let uint = new Uint8Array(env.buff)
+    let twist = Twist.fromBytes(uint)
+    let abject = Abject.fromTwist(twist)
+    console.dir(abject)
+    console.log('value', abject.value())
+    console.log('quantity', abject.getQuantity())
+    console.log('units', abject.getUnits())
+    let c = abject.rootContext()
+
     return env
 }
 
@@ -352,8 +366,6 @@ function rainbowsparkles() {
     ;[...document.querySelectorAll('circle')].map(p=>p.classList.toggle('nodesparkles'))
 }
 
-let emojis = get_me_all_the_emoji()
-let emhx = 1
 function get_me_all_the_emoji() {            // over-the-top emoji fetching courtesy of bogomoji
     let testCanvas = document.createElement("canvas")
     let miniCtx = testCanvas.getContext('2d', {willReadFrequently: true})
@@ -503,6 +515,8 @@ function highlight_node(id) {
 }
 
 function hash_munge(str) {                   // beautiful nonsense
+    if(!emhx && !emojis)
+        emojis = get_me_all_the_emoji()
     return str.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"')
               .replaceAll(/>41(.*?)</g, (m,p) => emhx ? `>41${p}<` : `>${p.match(/.{1,11}/g).map(n=>emojis[parseInt(n,16)%emojis.length])
               .join('')}<`)
@@ -524,6 +538,13 @@ function emojex() {
     select_node(document.getElementsByClassName('select')[0]?.id)
     highlight_node(document.getElementsByClassName('highlight')[0]?.id)
 }
+
+// export UI functions
+window.rainbowsparkles = rainbowsparkles
+window.highlight_node = highlight_node
+window.select_node = select_node
+window.showhide = showhide
+window.emojex = emojex
 
 
 // init
