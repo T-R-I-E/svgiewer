@@ -221,10 +221,36 @@ function end_timer(env) {
     return env
 }
 
+// The min and max coordinates among all rendered twists
+var min_x;
+var min_y;
+var max_x;
+var max_y;
+
+function reset_limits() {
+    min_x = null;
+    min_y = null;
+    max_x = null;
+    max_y = null;
+}
+
+function override_limits(twist) {
+    max_x = max_x ?? twist.cx;
+    min_x = min_x ?? twist.cx;
+    max_y = max_y ?? twist.cy;
+    min_y = min_y ?? twist.cy;
+    if (twist.cx > max_x) max_x = twist.cx;
+    if (twist.cx < min_x) min_x = twist.cx;
+    if (twist.cy > max_y) max_y = twist.cy;
+    if (twist.cy < min_y) min_y = twist.cy;
+}
+
 function render_svg(env) {
+    reset_limits()
     let svgs = '', edgestr = '', edges = []
     env.shapes[TWIST].forEach(a => {
         if(!a.cx) return 0                   // ignore equivocal successors
+        override_limits(a)
         svgs += `<circle cx="${a.cx}" cy="${a.cy}" r="5" fill="#${a.colour}" id="${a.hash}" />`
         if(a.prev)
             edges.push([a, a.prev, 'prev'])
@@ -266,6 +292,7 @@ function write_stats(env) {
         ${env.shapes[BODY].length.toLocaleString()} bodies,
         and <a href="#" onclick="showhide('errors')">${env.errors.length.toLocaleString()} errors</a>.
     </p>
+    <p><a href="#" onclick="download_svg()">Download as svg</a></p>
     <p><a href="#" onclick="emojex()">emoji/hex</a> <a href="#" onclick="rainbowsparkles()">rainbow/sparkles</a></p>
     <div id="errors" class="hidden"><p>${hash_munge(env.errors.map(e=>e.message).join('</p><p>'))}</p></div>
     `
@@ -345,6 +372,21 @@ function fastprev(twist) {
     if(twist.prev.teth)
         return twist.prev
     return fastprev(twist.prev)
+}
+
+function download_svg() {
+    let style = "<style>" + document.documentElement.querySelector('style').innerHTML + "</style>";
+    let svg_data = vp.innerHTML; 
+    let head = `<svg title="graph" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="${min_x - 10} ${min_y - 10} ${max_x + 10} ${max_y + 20}">`;
+    let full_svg = head +  style + svg_data + "</svg>";
+    let blob = new Blob([full_svg], {type: "image/svg+xml"});
+
+    let link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = env.focus.hash + ".svg";
+
+    link.click();
+    URL.revokeObjectURL(link.href);
 }
 
 function rainbowsparkles() {
