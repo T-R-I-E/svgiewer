@@ -17,7 +17,7 @@
 // list other shapes
 // display body (abjectify?)
 
-import {DQ} from "../../src/abject/quantity.js"
+import {DQ} from "./src/abject/quantity.js"
 import { Atoms } from "./src/core/atoms.js"
 import { Twist } from "./src/core/twist.js"
 import { Abject } from "./src/abject/abject.js"
@@ -46,8 +46,8 @@ let showpipe = pipe( buff_to_env
                    , render_svg
                    , select_focus
                    , write_stats
-                   , pause
-                   , check_hitches
+                //    , pause
+                //    , check_hitches
                    )
 
 function buff_to_env(buff) {
@@ -507,9 +507,9 @@ function showhide(id) {
 
 function show_abject_info(id) {
     try {
-        // let uint = new Uint8Array(env.buff)
-        // let atoms = Atoms.fromBytes(uint)
-        let twist = new Twist(env.atomsss, id) // Twist.fromBytes(uint)
+        let uint = new Uint8Array(env.buff)
+        let atoms = Atoms.fromBytes(uint)
+        let twist = new Twist(atoms, id) // Twist.fromBytes(uint)
         env.abject = Abject.fromTwist(twist)
         env.info = { value: env.abject.value(), quantity: env.abject.getQuantity()
                    , units: env.abject.getUnits() } //, root: env.abject.rootContext()}
