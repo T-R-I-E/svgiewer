@@ -47,6 +47,7 @@ let showpipe = pipe( buff_to_env
                    , plonk_twists
                    , decorate_twists
                    , end_timer
+                   , set_limits
                    , render_svg
                    , select_focus
                    , write_stats
@@ -227,47 +228,33 @@ function end_timer(env) {
     return env
 }
 
-// The min and max coordinates among all rendered twists
-var min_x;
-var min_y;
-var max_x;
-var max_y;
-
-function reset_limits() {
-    min_x = null;
-    min_y = null;
-    max_x = null;
-    max_y = null;
-}
-
-function override_limits(twist) {
-    max_x = max_x ?? twist.cx;
-    min_x = min_x ?? twist.cx;
-    max_y = max_y ?? twist.cy;
-    min_y = min_y ?? twist.cy;
-    if (twist.cx > max_x) max_x = twist.cx;
-    if (twist.cx < min_x) min_x = twist.cx;
-    if (twist.cy > max_y) max_y = twist.cy;
-    if (twist.cy < min_y) min_y = twist.cy;
+function set_limits(env) {
+    env.limits = {minx: Infinity, manx: -Infinity, miny: Infinity, many: -Infinity}
+    let l = env.limits
+    env.shapes[TWIST].forEach(t => {
+        if (t.cx < l.minx) l.minx = t.cx;
+        if (t.cx > l.manx) l.manx = t.cx;
+        if (t.cy < l.miny) l.miny = t.cy;
+        if (t.cy > l.many) l.many = t.cy;
+    })
+    return env
 }
 
 function render_svg(env) {
-    reset_limits()
     let svgs = '', edgestr = '', edges = []
-    env.shapes[TWIST].forEach(a => {
-        if(!a.cx) return 0                   // ignore equivocal successors
-        override_limits(a)
-        svgs += `<circle cx="${a.cx}" cy="${a.cy}" r="5" fill="#${a.colour}" id="${a.hash}" />`
-        if(a.prev)
-            edges.push([a, a.prev, 'prev'])
-        if(a.teth)
-            edges.push([a, a.teth, 'teth'])
-        if(a.body.posts.length)
-            a.body.posts.forEach(e => edges.push([a, e, 'post']))
-        if(a.body.hoisting.length)
-            a.body.hoisting.forEach(e => {
-                edges.push([a, e[0], 'lead'])
-                edges.push([a, e[1], 'meet'])
+    env.shapes[TWIST].forEach(t => {
+        if(!t.cx) return 0                   // ignore equivocal successors
+        svgs += `<circle cx="${t.cx}" cy="${t.cy}" r="5" fill="#${t.colour}" id="${t.hash}" />`
+        if(t.prev)
+            edges.push([t, t.prev, 'prev'])
+        if(t.teth)
+            edges.push([t, t.teth, 'teth'])
+        if(t.body.posts.length)
+            t.body.posts.forEach(e => edges.push([t, e, 'post']))
+        if(t.body.hoisting.length)
+            t.body.hoisting.forEach(e => {
+                edges.push([t, e[0], 'lead'])
+                edges.push([t, e[1], 'meet'])
             })
     })
     edges.reverse().forEach(e => {           // prev and teth at back for style
@@ -293,15 +280,14 @@ function write_stats(env) {
     `<p>Analyzed ${env.buff.byteLength.toLocaleString()} bytes
         containing ${env.atoms.length.toLocaleString()} atoms
         with ${env.dupes.length.toLocaleString()} duplicates
-        in ${(env.time.end-env.time.start).toFixed(0)}ms.</p>
+        in ${(env.time.end-env.time.start).toFixed(0)}ms. </p>
      <p>There are ${env.shapes[TWIST].length.toLocaleString()} twists,
         ${env.shapes[BODY].length.toLocaleString()} bodies,
-        and <a href="#" onclick="showhide('errors')">${env.errors.length.toLocaleString()} errors</a>.
-    </p>
-    <p><a href="#" onclick="download_svg()">Download as svg</a></p>
-    <p><a href="#" onclick="emojex()">emoji/hex</a> <a href="#" onclick="rainbowsparkles()">rainbow/sparkles</a></p>
-    <div id="errors" class="hidden"><p>${hash_munge(env.errors.map(e=>e.message).join('</p><p>'))}</p></div>
-    `
+        and <a href="" onclick="showhide('errors');return false">${env.errors.length.toLocaleString()} errors</a>. </p>
+     <p><a href="" onclick="emojex();return false">emoji/hex</a>
+        <a href="" onclick="rainbowsparkles();return false">rainbow/sparkles</a>
+        <a href="" onclick="download_svg();return false">download as svg</a> </p>
+     <div id="errors" class="hidden"><p>${hash_munge(env.errors.map(e=>e.message).join('</p><p>'))}</p></div>`
     return env
 }
 
@@ -386,54 +372,6 @@ function fastprev(twist) {
     if(twist.prev.teth)
         return twist.prev
     return fastprev(twist.prev)
-}
-
-function download_svg() {
-    let style = "<style>" + document.documentElement.querySelector('style').innerHTML + "</style>";
-    let svg_data = vp.innerHTML; 
-    let head = `<svg title="graph" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="${min_x - 10} ${min_y - 10} ${max_x + 10} ${max_y + 20}">`;
-    let full_svg = head +  style + svg_data + "</svg>";
-    let blob = new Blob([full_svg], {type: "image/svg+xml"});
-
-    let link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = env.focus.hash + ".svg";
-
-    link.click();
-    URL.revokeObjectURL(link.href);
-}
-
-function rainbowsparkles() {
-    ;[...document.querySelectorAll('path')].map(p=>p.classList.toggle('rainbowsparkles'))
-    ;[...document.querySelectorAll('circle')].map(p=>p.classList.toggle('nodesparkles'))
-}
-
-function get_me_all_the_emoji() {            // over-the-top emoji fetching courtesy of bogomoji
-    let testCanvas = document.createElement("canvas")
-    let miniCtx = testCanvas.getContext('2d', {willReadFrequently: true})
-    let q = []
-    let MAGICK_EMOJI_NUMBER = 127514
-    for (let i = 0; i < 2000; i++) {
-        let char = String.fromCodePoint(MAGICK_EMOJI_NUMBER + i)
-        if (is_char_emoji(miniCtx, char))
-            q.push(char)
-    }
-    return q
-}
-function is_char_emoji(ctx, char) {
-    let size = ctx.measureText(char).width
-    if (!size) return false
-    ctx.clearRect(0, 0, size + 3, size + 3)  // three is a lucky number
-    ctx.fillText(char, 0, size)              // probably chops off the emoji edges
-    let data = ctx.getImageData(0, 0, size, size).data
-    for (var i = data.length - 4; i >= 0; i -= 4)
-        if (!is_colour_boring(data[i], data[i + 1], data[i + 2]))
-            return true
-    return false
-}
-function is_colour_boring(r, g, b) {         // if the pixel is not black, white, or red,
-    let s = r + g + b                        // then it probably belongs to an emoji
-    return (!s || s === 765 || s === 255 && s === r)
 }
 
 
@@ -581,9 +519,59 @@ function emojex() {
     highlight_node(document.getElementsByClassName('highlight')[0]?.id)
 }
 
+
+function download_svg() {
+    let style = "<style>" + document.documentElement.querySelector('style').innerHTML + "</style>";
+    let svg_data = vp.innerHTML;
+    let head = `<svg title="graph" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="${env.limits.minx - 10} ${env.limits.miny - 10} ${env.limits.manx + 10} ${env.limits.many + 20}">`;
+    let full_svg = head + style + svg_data + "</svg>";
+    let blob = new Blob([full_svg], {type: "image/svg+xml"});
+
+    let link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = env.focus.hash + ".svg";
+    link.click();
+    URL.revokeObjectURL(link.href);
+}
+
+function rainbowsparkles() {
+    ;[...document.querySelectorAll('path')].map(p=>p.classList.toggle('rainbowsparkles'))
+    ;[...document.querySelectorAll('circle')].map(p=>p.classList.toggle('nodesparkles'))
+}
+
+function get_me_all_the_emoji() {            // over-the-top emoji fetching courtesy of bogomoji
+    let testCanvas = document.createElement("canvas")
+    let miniCtx = testCanvas.getContext('2d', {willReadFrequently: true})
+    let q = []
+    let MAGICK_EMOJI_NUMBER = 127514
+    for (let i = 0; i < 2000; i++) {
+        let char = String.fromCodePoint(MAGICK_EMOJI_NUMBER + i)
+        if (is_char_emoji(miniCtx, char))
+            q.push(char)
+    }
+    return q
+}
+function is_char_emoji(ctx, char) {
+    let size = ctx.measureText(char).width
+    if (!size) return false
+    ctx.clearRect(0, 0, size + 3, size + 3)  // three is a lucky number
+    ctx.fillText(char, 0, size)              // probably chops off the emoji edges
+    let data = ctx.getImageData(0, 0, size, size).data
+    for (var i = data.length - 4; i >= 0; i -= 4)
+        if (!is_colour_boring(data[i], data[i + 1], data[i + 2]))
+            return true
+    return false
+}
+function is_colour_boring(r, g, b) {         // if the pixel is not black, white, or red,
+    let s = r + g + b                        // then it probably belongs to an emoji
+    return (!s || s === 765 || s === 255 && s === r)
+}
+
+
 // export UI functions
 window.rainbowsparkles = rainbowsparkles
 window.highlight_node = highlight_node
+window.download_svg = download_svg
 window.select_node = select_node
 window.showhide = showhide
 window.emojex = emojex
