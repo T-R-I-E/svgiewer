@@ -12,11 +12,7 @@
 // default example file
 // better arrows... go up and down even if you're stuck?
 // highlight hitches
-// hash check
-// shape check
-// sig check
-// hitch check
-// rig check
+// check rigs
 // make multi-successors a different size? (or a red ring?)
 // list other shapes
 // display body (abjectify?)
@@ -30,8 +26,6 @@ const BODY  = 49
 const el = document.getElementById.bind(document)
 const vp = el('viewport')                    // svg canvas
 let env = {}
-let emojis = null
-let emhx = 1
 
 let showpipe = pipe( buff_to_env
                    , start_timer
@@ -57,7 +51,7 @@ let showpipe = pipe( buff_to_env
                    )
 
 function buff_to_env(buff) {
-    env = {buff, atoms:[], dupes:[], index:{}, shapes:{}, errors:[], firsts:[]}
+    env = {buff, atoms:[], dupes:[], index:{}, shapes:{}, errors:[], firsts:[], emojis:0, emhx:1}
     return env
 }
 
@@ -306,15 +300,16 @@ function pause(env) {
 }
 
 function check_hitches(env) {
-    let uint = new Uint8Array(env.buff)
-    let twist = Twist.fromBytes(uint)
-    let abject = Abject.fromTwist(twist)
-    console.dir(abject)
-    console.log('value', abject.value())
-    console.log('quantity', abject.getQuantity())
-    console.log('units', abject.getUnits())
-    let c = abject.rootContext()
-
+    try {
+        let uint = new Uint8Array(env.buff)
+        let twist = Twist.fromBytes(uint)
+        env.abject = Abject.fromTwist(twist)
+        env.info = { value: env.abject.value(), quantity: env.abject.getQuantity()
+                   , units: env.abject.getUnits() } //, root: env.abject.rootContext()}
+        el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2)
+    } catch(e) {
+        el('abject').innerHTML = 'Not an abject'
+    }
     return env
 }
 
@@ -495,10 +490,10 @@ function highlight_node(id) {
 }
 
 function hash_munge(str) {                   // beautiful nonsense
-    if(!emhx && !emojis)
-        emojis = get_me_all_the_emoji()
+    if(!env.emhx && !env.emojis)
+        env.emojis = get_me_all_the_emoji()
     return str.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"')
-              .replaceAll(/>41(.*?)</g, (m,p) => emhx ? `>41${p}<` : `>${p.match(/.{1,11}/g).map(n=>emojis[parseInt(n,16)%emojis.length])
+              .replaceAll(/>41(.*?)</g, (m,p) => env.emhx ? `>41${p}<` : `>${p.match(/.{1,11}/g).map(n=>env.emojis[parseInt(n,16)%env.emojis.length])
               .join('')}<`)
 }
 
@@ -514,7 +509,7 @@ function showhide(id) {
 }
 
 function emojex() {
-    emhx ^= 1
+    env.emhx ^= 1
     select_node(document.getElementsByClassName('select')[0]?.id)
     highlight_node(document.getElementsByClassName('highlight')[0]?.id)
 }
