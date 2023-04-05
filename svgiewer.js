@@ -18,8 +18,9 @@
 // display body (abjectify?)
 
 import {DQ} from "../../src/abject/quantity.js"
-import { Abject } from "./src/abject/abject.js"
+import { Atoms } from "./src/core/atoms.js"
 import { Twist } from "./src/core/twist.js"
+import { Abject } from "./src/abject/abject.js"
 
 const TWIST = 48                             // SHAPES
 const BODY  = 49
@@ -45,13 +46,13 @@ let showpipe = pipe( buff_to_env
                    , render_svg
                    , select_focus
                    , write_stats
-                   , setenv
                    , pause
                    , check_hitches
                    )
 
 function buff_to_env(buff) {
     env = {buff, atoms:[], dupes:[], index:{}, shapes:{}, errors:[], firsts:[], emojis:0, emhx:1}
+    window.env = env                         // make a global for DOM consumption
     return env
 }
 
@@ -290,11 +291,6 @@ function probe(env) {
     return env
 }
 
-function setenv(x) {
-    env = x                                  // make a global for DOM consumption
-    return env                               // ^ kind of a hack but pipe is async
-}
-
 function pause(env) {
     return new Promise(k => setTimeout(() => k(env), 0))
 }
@@ -302,11 +298,11 @@ function pause(env) {
 function check_hitches(env) {
     try {
         let uint = new Uint8Array(env.buff)
-        let twist = Twist.fromBytes(uint)
-        env.abject = Abject.fromTwist(twist)
-        env.info = { value: env.abject.value(), quantity: env.abject.getQuantity()
-                   , units: env.abject.getUnits() } //, root: env.abject.rootContext()}
-        el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2)
+        env.atomsss = Atoms.fromBytes(uint)
+        // env.abject = Abject.fromTwist(twist)
+        // env.info = { value: env.abject.value(), quantity: env.abject.getQuantity()
+        //            , units: env.abject.getUnits() } //, root: env.abject.rootContext()}
+        // el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2)
     } catch(e) {
         el('abject').innerHTML = 'Not an abject'
     }
@@ -479,6 +475,7 @@ function select_node(id) {
     let html = `<pre>${JSON.stringify(t, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
     el('select').innerHTML = hash_munge(html)
     scroll_to(t.cx, t.cy)
+    setTimeout(() => show_abject_info(id), 0)
 }
 
 function highlight_node(id) {
@@ -493,7 +490,7 @@ function hash_munge(str) {                   // beautiful nonsense
     if(!env.emhx && !env.emojis)
         env.emojis = get_me_all_the_emoji()
     return str.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"')
-              .replaceAll(/>41(.*?)</g, (m,p) => env.emhx ? `>41${p}<` : `>${p.match(/.{1,11}/g).map(n=>env.emojis[parseInt(n,16)%env.emojis.length])
+              .replaceAll(/>41(.*?)</g, (m,p) => env.emhx ? `>41${p}<` : `>${p.match(/.{1,23}/g).map(n=>env.emojis[parseInt(n,16)%env.emojis.length])
               .join('')}<`)
 }
 
@@ -506,6 +503,20 @@ function scroll_to(x, y) {
 
 function showhide(id) {
     el(id)?.classList?.toggle('hidden')
+}
+
+function show_abject_info(id) {
+    try {
+        // let uint = new Uint8Array(env.buff)
+        // let atoms = Atoms.fromBytes(uint)
+        let twist = new Twist(env.atomsss, id) // Twist.fromBytes(uint)
+        env.abject = Abject.fromTwist(twist)
+        env.info = { value: env.abject.value(), quantity: env.abject.getQuantity()
+                   , units: env.abject.getUnits() } //, root: env.abject.rootContext()}
+        el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2)
+    } catch(e) {
+        el('abject').innerHTML = 'Not an abject'
+    }
 }
 
 function emojex() {
