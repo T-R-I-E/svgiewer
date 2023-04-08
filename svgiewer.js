@@ -35,6 +35,7 @@ let showpipe = pipe( buff_to_env
                    , twist_list
                    , have_successors
                    , get_hitched
+                   , body_building
                    , get_in_line
                    , y_the_first_twist
                    , stack_lines
@@ -108,24 +109,27 @@ function untwist_bodies(env) {
         a.hoisting = []                      // for consistency
         a.posts  = []
         a.rigtrie = pairtrier(a.rigs, env)   // trieify rigs
+        a.cargooo = pairtrier(a.carg, env)
     })
     return env
 }
 
 function twist_list(env) {
-    env.shapes[TWIST].forEach(a => {
-        let b = pluck_hash(env.buff, a.bin.cfirst)
-        a.body = env.index[b] || 0
-        if(!a.body)                          // that's going to leave a mark
+    env.shapes[TWIST].forEach(t => {
+        let b = pluck_hash(env.buff, t.bin.cfirst)
+        t.body = env.index[b] || 0
+        if(!t.body)                          // that's going to leave a mark
             return 0
-        a.prev = a.body.prev                 // conveniences
-        a.teth = a.body.teth
-        a.posts = a.body.posts
-        a.hoisting = a.body.hoisting
-        a.succ = []
-        a.leadhoists = []
-        a.meethoists = []
-        a.body.twist = a                     // HACK: could be multiples
+        t.prev = t.body.prev                 // conveniences
+        t.teth = t.body.teth
+        t.posts = t.body.posts
+        t.hoisting = t.body.hoisting
+        t.succ = []
+        t.leadhoists = []
+        t.meethoists = []
+        t.body.twist = t                     // HACK: could be multiples
+        t.innies = []
+        t.outies = []
     })
     return env
 }
@@ -155,6 +159,20 @@ function get_hitched(env) {
             meet.meethoists.push(a.twist)
         })
     })
+    return env
+}
+
+function body_building(env) {
+    env.shapes[TWIST].forEach(t => {
+        t.innies = [].concat(t.succ.map(h => [h, "succ"]))
+        t.innies = [].concat(t.leadhoists.map(h => [h, "leadhoist"]))
+        t.innies = [].concat(t.meethoists.map(h => [h, "meethoist"]))
+        t.outies = [[t.body.prev, "prev"], [t.body.teth, "teth"]].filter(([a,b]) => a)
+        t.outies = t.outies.concat(t.body.hoisting.flatMap(([l,m]) => [[l, "lead"], [m, "meet"]]))
+        t.outies = t.outies.concat(t.body.posts.map(h => [h, "post"]))
+        t.outies = t.outies.concat(t.body.cargooo?.pairs?.flat()?.flatMap(h=>env.index[h])?.filter(t=>t?.shape==TWIST)?.map(h => [h, "cargo"]) || [])
+    })
+
     return env
 }
 
@@ -188,7 +206,6 @@ function stack_lines(env) {                  // one-pass line aligner, B- for sp
         if(min_tether < t.y)                 // move lines under their lowest tether
             t.y = +((min_tether + "").slice(0,-1) + "0" + (i+1))
     })
-    console.log(env.firsts.map(t=>[t.hash.slice(-3), t.y]).join(' : '))
     env.firsts.sort((a,b) => a.y - b.y).forEach((t,i) => t.y = i + .5)
     return env
 }
@@ -197,9 +214,9 @@ function stack_lines(env) {                  // one-pass line aligner, B- for sp
 function plonk_twists(env) {
     let x = 0, gas = 1000000, mind = 20      // gas gets us unstuck if this all goes wrong
     let lines = env.firsts.slice().reverse()
-    while(lines.length) {                    // rules: teth + posts + hoisting all required before plonking
+    while(lines.length) {                    // outies all required before plonking
         lines = lines.map(t => {
-            if((gas-- <= 0) || ((!t.teth || t.teth.x) && t.posts.every(t=>t.x) && t.hoisting.every(([t,u]) => t.x && u.x))) {
+            if(gas-- <= 0 || t.outies.every(t=>t[0].x)) {
                 t.x = x += mind
                 t = t.succ[0]
             }
@@ -224,8 +241,7 @@ function end_timer(env) {
 }
 
 function set_limits(env) {
-    env.limits = {minx: Infinity, manx: -Infinity, miny: Infinity, many: -Infinity}
-    let l = env.limits
+    let l = env.limits = {minx: Infinity, manx: -Infinity, miny: Infinity, many: -Infinity}
     env.shapes[TWIST].forEach(t => {
         if (t.cx < l.minx) l.minx = t.cx;
         if (t.cx > l.manx) l.manx = t.cx;
@@ -237,22 +253,14 @@ function set_limits(env) {
 
 function render_svg(env) {
     let svgs = '', edgestr = '', edges = []
+    let order = ['prev', 'teth', 'lead', 'meet', 'post', 'cargo']
     env.shapes[TWIST].forEach(t => {
         if(!t.cx) return 0                   // ignore equivocal successors
         svgs += `<circle cx="${t.cx}" cy="${t.cy}" r="5" fill="#${t.colour}" id="${t.hash}" />`
-        if(t.prev)
-            edges.push([t, t.prev, 'prev'])
-        if(t.teth)
-            edges.push([t, t.teth, 'teth'])
-        if(t.body.posts.length)
-            t.body.posts.forEach(e => edges.push([t, e, 'post']))
-        if(t.body.hoisting.length)
-            t.body.hoisting.forEach(e => {
-                edges.push([t, e[0], 'lead'])
-                edges.push([t, e[1], 'meet'])
-            })
+        edges = edges.concat(t.outies.map(o => [t, o[0], o[1]]))
     })
-    edges.reverse().forEach(e => {           // prev and teth at back for style
+    edges.sort((a,b) => order.indexOf(a[2]) - order.indexOf(b[2]))
+         .forEach(e => {                     // prev and teth at back for style
         let fx = e[0].cx, fy = e[0].cy, tx = e[1].cx, ty = e[1].cy
         if(!(fx && fy && tx && ty)) return 0 // also eq successor
         let dashed = e[0].cx < e[1].cx ? 'dashed' : ''
@@ -295,20 +303,6 @@ function pause(env) {
     return new Promise(k => setTimeout(() => k(env), 0))
 }
 
-function check_hitches(env) {
-    try {
-        let uint = new Uint8Array(env.buff)
-        env.atomsss = Atoms.fromBytes(uint)
-        // env.abject = Abject.fromTwist(twist)
-        // env.info = { value: env.abject.value(), quantity: env.abject.getQuantity()
-        //            , units: env.abject.getUnits() } //, root: env.abject.rootContext()}
-        // el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2)
-    } catch(e) {
-        el('abject').innerHTML = 'Not an abject'
-    }
-    return env
-}
-
 
 // helpers
 
@@ -329,6 +323,8 @@ function pluck_hash(b, s) {
     let l = 0, ha = pluck_hex(b, s, 1)
     if(ha === '41')
         l = 32
+    else if(ha === '22')
+        l = 32
     else
         return 0
     return ha + pluck_hex(b, s + 1, l)
@@ -344,6 +340,11 @@ function leng(h) {
 }
 
 function pairtrier(h, env) {
+    // for unzipping pairtries
+    // q = env.shapes[63].filter(p => p.pairs).reduce((acc,p) => acc.concat(p.pairs), [])
+    // w = q.filter(([a,b]) => a + b !== 0)
+    // e = w.map(([a, b]) => [env.index[a] ? env.index[a] : a, env.index[b] ? env.index[b] : b])
+
     let trie = env.index[h]
     if(!trie) return 0
     if(trie.shape !== '63') return 0         // don't try to trie a non-trie tree
@@ -472,7 +473,10 @@ function select_node(id) {
     if (!t || !dom) return 0
         ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
     dom.classList.add('select')
-    let html = `<pre>${JSON.stringify(t, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
+    let html = ''
+    html += `<pre>${JSON.stringify(t, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
+    html += `<pre>${JSON.stringify(t.body, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
+    html += `<pre>${JSON.stringify(t.body.cargooo, 0, 2)}</pre>`
     el('select').innerHTML = hash_munge(html)
     scroll_to(t.cx, t.cy)
     setTimeout(() => show_abject_info(id), 0)
