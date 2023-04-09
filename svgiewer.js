@@ -8,16 +8,12 @@
 
 
 // TODO... maybe:
+// rels! and transform output with rels
 // svg controls (matrix transform instead of currentTranslate)
-// default example file
-// better arrows... go up and down even if you're stuck?
 // highlight hitches
 // check rigs
-// make multi-successors a different size? (or a red ring?)
-// list other shapes
-// display body (abjectify?)
 
-import {DQ} from "./src/abject/quantity.js"
+import {DQ} from "./src/abject/quantity.js"  // necessary, for some reason
 import { Atoms } from "./src/core/atoms.js"
 import { Twist } from "./src/core/twist.js"
 import { Abject } from "./src/abject/abject.js"
@@ -47,8 +43,6 @@ let showpipe = pipe( buff_to_env
                    , render_svg
                    , select_focus
                    , write_stats
-                //    , pause
-                //    , check_hitches
                    )
 
 function buff_to_env(buff) {
@@ -96,20 +90,19 @@ function buff_to_rough(env) {
 }
 
 function untwist_bodies(env) {
-    env.shapes[BODY].forEach(a => {          // reverse twister all six body parts
-        let i = a.bin.cfirst
+    env.shapes[BODY].forEach(b => {          // reverse twister all six body parts
+        let i = b.bin.cfirst
         let p = pluck_hash(env.buff, i)      // order is important
-        a.prev = env.index[p] || 0           // objectify prev
+        b.prev = env.index[p] || 0           // objectify prev
         let t = pluck_hash(env.buff, (i += leng(p)))
-        a.teth = env.index[t] || 0           // objectify teth
-        a.shld = pluck_hash(env.buff, (i += leng(t)))
-        a.reqs = pluck_hash(env.buff, (i += leng(a.shld)))
-        a.rigs = pluck_hash(env.buff, (i += leng(a.reqs)))
-        a.carg = pluck_hash(env.buff, (i += leng(a.rigs)))
-        a.hoisting = []                      // for consistency
-        a.posts  = []
-        a.rigtrie = pairtrier(a.rigs, env)   // trieify rigs
-        a.cargooo = pairtrier(a.carg, env)
+        b.teth = env.index[t] || 0           // objectify teth
+        b.shld = pluck_hash(env.buff, (i += leng(t)))
+        b.reqs = pluck_hash(env.buff, (i += leng(b.shld)))
+        b.rigs = pluck_hash(env.buff, (i += leng(b.reqs)))
+        b.carg = pluck_hash(env.buff, (i += leng(b.rigs)))
+        b.rigtrie = pairtrier(b.rigs, env)   // trieify rigs
+        b.cargooo = pairtrier(b.carg, env)
+        b.outies = []
     })
     return env
 }
@@ -118,45 +111,43 @@ function twist_list(env) {
     env.shapes[TWIST].forEach(t => {
         let b = pluck_hash(env.buff, t.bin.cfirst)
         t.body = env.index[b] || 0
-        if(!t.body)                          // that's going to leave a mark
-            return 0
-        t.prev = t.body.prev                 // conveniences
-        t.teth = t.body.teth
-        t.posts = t.body.posts
-        t.hoisting = t.body.hoisting
-        t.succ = []
-        t.leadhoists = []
-        t.meethoists = []
+        if(!t.body) return 0                 // that's going to leave a mark
         t.body.twist = t                     // HACK: could be multiples
         t.innies = []
-        t.outies = []
+        t.outies = t.body.outies
+        t.succ = []                          // special cased for simplicity
+
+        t.prev = t.body.prev                 // conveniences
+        t.teth = t.body.teth
     })
     return env
 }
 
 function have_successors(env) {
-    env.shapes[TWIST].forEach(a => {         // seperate phase so everything will .succ
-        if(!a.prev) return 0
-        a.prev.succ.push(a)                  // HACK: doesn't check legitimacy
-        if(a.prev.succ.length > 1)
-            env.errors.push({twist: a, message: `Equivocation in "${a.prev.hash}"`})
+    env.shapes[TWIST].forEach(t => {         // seperate phase so everything will .succ
+        if(!t.prev) return 0
+        t.prev.succ.push(t)                  // HACK: doesn't check legitimacy
+        if(t.prev.succ.length > 1)
+            env.errors.push({twist: t, message: `Equivocation in "${t.prev.hash}"`})
     })
     return env
 }
 
 function get_hitched(env) {
-    env.shapes[BODY].forEach(a => {          // slurps out connections. cheats a lot.
-        if(!a.rigtrie) return 0
-        a.rigtrie.pairs.forEach(pair => {
+    env.shapes[BODY].forEach(b => {          // slurps out connections. cheats a lot.
+        if(!b.rigtrie) return 0
+        b.rigtrie.pairs.forEach(pair => {
+            let t = b.twist
             let meet = env.index[pair[1]]    // HACK: doesn't check hoist
             if(!meet || meet.shape != TWIST) return 0
-            if(env.index[pair[0]])
-                return a.posts.push(meet)    // HACK: doesn't check post
+            if(env.index[pair[0]])           // HACK: doesn't check post
+                return b.outies.push([meet, 'post'])
             let lead = fastprev(meet)
             if(!lead) return 0
-            a.hoisting.push([lead, meet])
-            lead.leadhoists.push(a.twist)    // in edges for up direction
-            meet.meethoists.push(a.twist)
+            b.outies.push([lead, 'lead'])
+            b.outies.push([meet, 'meet'])
+            lead.innies.push([t, 'leadup'])  // in edges for up direction
+            meet.innies.push([t, 'meetup'])
         })
     })
     return env
@@ -164,23 +155,22 @@ function get_hitched(env) {
 
 function body_building(env) {
     env.shapes[TWIST].forEach(t => {
-        t.innies = [].concat(t.succ.map(h => [h, "succ"]))
-        t.innies = [].concat(t.leadhoists.map(h => [h, "leadhoist"]))
-        t.innies = [].concat(t.meethoists.map(h => [h, "meethoist"]))
-        t.outies = [[t.body.prev, "prev"], [t.body.teth, "teth"]].filter(([a,b]) => a)
-        t.outies = t.outies.concat(t.body.hoisting.flatMap(([l,m]) => [[l, "lead"], [m, "meet"]]))
-        t.outies = t.outies.concat(t.body.posts.map(h => [h, "post"]))
-        t.outies = t.outies.concat(t.body.cargooo?.pairs?.flat()?.flatMap(h=>env.index[h])?.filter(t=>t?.shape==TWIST)?.map(h => [h, "cargo"]) || [])
+        t.innies = t.innies.concat(t.succ.map(h => [h, "succ"]))
+        t.body.cargooo?.pairs?.flat()?.flatMap(h=>env.index[h])?.filter(t1=>t1?.shape==TWIST)?.forEach(t1 => {
+            t.outies.push([t1, "cargo"])
+            t1.innies.push([t, "cargoup"])
+        })
+        t.outies = t.outies.concat([[t.body.prev, "prev"], [t.body.teth, "teth"]].filter(([a,b]) => a))
     })
 
     return env
 }
 
 function get_in_line(env) {
-    env.shapes[TWIST].forEach(a => {
-        [a.first, a.findex] = get_first(a)
-        if(!a.findex)
-            env.firsts.push(a)               // a DAG root in this bag of atoms
+    env.shapes[TWIST].forEach(t => {
+        [t.first, t.findex] = get_first(t)
+        if(!t.findex)
+            env.firsts.push(t)               // a DAG root in this bag of atoms
     })
     return env
 }
@@ -340,11 +330,6 @@ function leng(h) {
 }
 
 function pairtrier(h, env) {
-    // for unzipping pairtries
-    // q = env.shapes[63].filter(p => p.pairs).reduce((acc,p) => acc.concat(p.pairs), [])
-    // w = q.filter(([a,b]) => a + b !== 0)
-    // e = w.map(([a, b]) => [env.index[a] ? env.index[a] : a, env.index[b] ? env.index[b] : b])
-
     let trie = env.index[h]
     if(!trie) return 0
     if(trie.shape !== '63') return 0         // don't try to trie a non-trie tree
@@ -359,11 +344,15 @@ function pairtrier(h, env) {
     return trie
 }
 
-function fastprev(twist) {
-    if(!twist.prev) return 0
-    if(twist.prev.teth)
-        return twist.prev
-    return fastprev(twist.prev)
+function fastprev(t) {
+    if(!t.prev) return 0
+    if(t.prev.teth)
+        return t.prev
+    return fastprev(t.prev)
+}
+
+function get(t, label) {
+    return t.outies.find(e => e[1] === label)?.[0] || t.innies.find(e => e[1] === label)?.[0]
 }
 
 
@@ -459,9 +448,9 @@ window.addEventListener('keydown', e => {
     let t = env.index?.[id]                  // global env
     if (!id || !t) return 0
     if (key === 38)                          // up up
-        select_node(t.meethoists[0]?.hash || t.leadhoists[0]?.hash || t.posts[0]?.hash || t.teth?.hash)
+        select_node(get(t, 'cargoup')?.hash || get(t, 'meetup')?.hash || get(t, 'leadup')?.hash || get(t, 'post')?.hash || t.teth?.hash)
     if (key === 40)                          // down down
-        select_node(t.hoisting[0]?.[0]?.hash)
+        select_node(get(t, 'cargo')?.hash || get(t, 'lead')?.hash || get(t, 'meet')?.hash)
     if (key === 37)                          // left right
         select_node(t.prev.hash)
     if (key === 39)                          // left right
@@ -513,7 +502,7 @@ function show_abject_info(id) {
     try {
         let uint = new Uint8Array(env.buff)
         let atoms = Atoms.fromBytes(uint)
-        let twist = new Twist(atoms, id) // Twist.fromBytes(uint)
+        let twist = new Twist(atoms, id)
         env.abject = Abject.fromTwist(twist)
         env.info = { value: env.abject.value(), quantity: env.abject.getQuantity()
                    , units: env.abject.getUnits() } //, root: env.abject.rootContext()}
