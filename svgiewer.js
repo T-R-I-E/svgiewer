@@ -7,9 +7,12 @@
 // A TODA file view tool
 
 
-// TODO... maybe:
-// rels! and transform output with rels
+// TODO:
 // svg controls (matrix transform instead of currentTranslate)
+// rels! and transform output with rels
+// unpack hash lists (0x61) so we can see delegate-confirm
+// full ADOT runtime
+// more abject details
 // highlight hitches
 // check rigs
 
@@ -425,23 +428,6 @@ vp.addEventListener('mousemove', e => {
     }
 })
 
-el('todafile').onchange = function (t) {
-    let file = t.srcElement.files?.[0]
-    showpipe(file.arrayBuffer())
-}
-
-el('todaurl').onchange = function (e) {
-    let url = e.target.value.trim()
-    window.location.hash = url
-    fetch_url(url)
-}
-
-function fetch_url(url) {
-    return fetch(url)
-        .then(res => showpipe(res.arrayBuffer()))
-        .catch(err => console.log('e', err)) // stop trying to make fetch happen
-}
-
 window.addEventListener('keydown', e => {
     if(typeof env === 'undefined') return true
     let key = e.keyCode, id = document.getElementsByClassName('select')[0]?.id
@@ -457,18 +443,57 @@ window.addEventListener('keydown', e => {
         select_node(t.succ[0]?.hash)
 })
 
+el('todafile').onchange = function (t) {
+    let file = t.srcElement.files?.[0]
+    showpipe(file.arrayBuffer())
+}
+
+el('todaurl').onchange = function (e) {
+    let url = e.target.value.trim()
+    window.location.hash = url
+    fetch_url(url)
+}
+
+// DOM helpers
+
+function fetch_url(url) {
+    return fetch(url)
+        .then(res => showpipe(res.arrayBuffer()))
+        .catch(err => console.error(err))    // stop trying to make fetch happen
+}
+
 function select_node(id) {
     let t = env.index?.[id], dom = el(id)    // global env
     if (!t || !dom) return 0
         ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
     dom.classList.add('select')
     let html = ''
-    html += `<pre>${JSON.stringify(t, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
-    html += `<pre>${JSON.stringify(t.body, (k, v) => k ? (v.hash ? v.hash : v) : v, 2)}</pre>`
-    html += `<pre>${JSON.stringify(t.body.cargooo, 0, 2)}</pre>`
+    html += `Twist<pre>${JSON.stringify(t,              strsmasher, 2)}</pre>`
+    html += `Body <pre>${JSON.stringify(t.body,         strsmasher, 2)}</pre>`
+    html += `Cargo<pre>${JSON.stringify(t.body.cargooo, strsmasher, 2)}</pre>`
+    // TODO
+    // html = inject_rels(html)
     el('select').innerHTML = hash_munge(html)
+    setTimeout(x => show_abject_info(id), 0) // pause for responsiveness
     scroll_to(t.cx, t.cy)
-    setTimeout(() => show_abject_info(id), 0)
+}
+
+function strsmasher(k, v) {
+    if(['bin', 'x', 'y', 'cx', 'cy', 'colour', 'cargooo'].includes(k))
+        return x=>x
+    if(k === 'innies' || k === 'outies')
+        return v.map(v => {return {[v[1]]: v[0].hash}})
+    return k ? (v.hash ? v.hash : v) : v
+}
+
+function hash_munge(str) {                   // beautiful nonsense
+    if(!env.emhx && !env.emojis)
+        env.emojis = get_me_all_the_emoji()
+    return str.replaceAll(/\s*[}{]/g, '')
+              .replaceAll(/"(41.*?)"/g, (m,p) => env.index[p]?.shape !== '48' ? p :
+                `"<a href="" onmouseover="highlight_node('${p}')" onclick="select_node('${p}');return false;">${p}</a>"`)
+              .replaceAll(/>41(.*?)</g, (m,p) => env.emhx ? `>41${p}<` : `>${p.match(/.{1,23}/g).map(n=>env.emojis[parseInt(n,16)%env.emojis.length])
+              .join('')}<`)
 }
 
 function highlight_node(id) {
@@ -477,14 +502,6 @@ function highlight_node(id) {
     let html  = `<p>Focus: ${hash_munge('"'+env.focus.hash+'"')}</p>`
         html += `<p>Highlight: "${id}"</p>`  // focus is here so it refreshes w/ emojihex
     el('highlight').innerHTML = hash_munge(html).replace(/onmouseover=".*?"/, '') // does not play well with onclick
-}
-
-function hash_munge(str) {                   // beautiful nonsense
-    if(!env.emhx && !env.emojis)
-        env.emojis = get_me_all_the_emoji()
-    return str.replaceAll(/"(41.*?)"/g, '"<a href="" onmouseover="highlight_node(\'$1\')" onclick="select_node(\'$1\');return false;">$1</a>"')
-              .replaceAll(/>41(.*?)</g, (m,p) => env.emhx ? `>41${p}<` : `>${p.match(/.{1,23}/g).map(n=>env.emojis[parseInt(n,16)%env.emojis.length])
-              .join('')}<`)
 }
 
 function scroll_to(x, y) {
@@ -512,20 +529,13 @@ function show_abject_info(id) {
     }
 }
 
-function emojex() {
-    env.emhx ^= 1
-    select_node(document.getElementsByClassName('select')[0]?.id)
-    highlight_node(document.getElementsByClassName('highlight')[0]?.id)
-}
-
-
 function download_svg() {
-    let style = "<style>" + document.documentElement.querySelector('style').innerHTML + "</style>";
-    let svg_data = vp.innerHTML;
     let head = `<svg title="graph" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="${env.limits.minx - 10} ${env.limits.miny - 10} ${env.limits.manx + 10} ${env.limits.many + 20}">`;
+    let style = "<style>" + el('style').innerHTML + "</style>";
+    let svg_data = vp.innerHTML;
     let full_svg = head + style + svg_data + "</svg>";
-    let blob = new Blob([full_svg], {type: "image/svg+xml"});
 
+    let blob = new Blob([full_svg], {type: "image/svg+xml"});
     let link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = env.focus.hash + ".svg";
@@ -536,6 +546,12 @@ function download_svg() {
 function rainbowsparkles() {
     ;[...document.querySelectorAll('path')].map(p=>p.classList.toggle('rainbowsparkles'))
     ;[...document.querySelectorAll('circle')].map(p=>p.classList.toggle('nodesparkles'))
+}
+
+function emojex() {
+    env.emhx ^= 1
+    select_node(document.getElementsByClassName('select')[0]?.id)
+    highlight_node(document.getElementsByClassName('highlight')[0]?.id)
 }
 
 function get_me_all_the_emoji() {            // over-the-top emoji fetching courtesy of bogomoji
