@@ -10,7 +10,6 @@
 // TODO:
 // svg controls (matrix transform instead of currentTranslate)
 // rels! and transform output with rels
-// unpack hash lists (0x61) so we can see delegate-confirm
 // full ADOT runtime
 // more abject details
 // highlight hitches
@@ -23,6 +22,8 @@ import { Abject } from "./src/abject/abject.js"
 
 const TWIST = 48                             // SHAPES
 const BODY  = 49
+const PAIRTRIE = 63
+const HASHLIST = 61
 const el = document.getElementById.bind(document)
 const vp = el('viewport')                    // svg canvas
 let env = {}
@@ -30,6 +31,8 @@ let env = {}
 let showpipe = pipe( buff_to_env
                    , start_timer
                    , buff_to_rough
+                   , unroll_lists
+                   , unzip_tries
                    , untwist_bodies
                    , twist_list
                    , have_successors
@@ -92,6 +95,32 @@ function buff_to_rough(env) {
     return env
 }
 
+function unroll_lists(env) {
+    env.shapes[HASHLIST].forEach(hl => {
+        hl.list = []
+        for (let i = hl.bin.cfirst; i < hl.bin.last;) {
+            let k = pluck_hash(env.buff, i)
+            i += leng(k)
+            hl.list.push(k)
+        }
+    })
+    return env
+}
+
+function unzip_tries(env) {
+    env.shapes[PAIRTRIE].forEach(trie => {
+        trie.pairs = []
+        for (let i = trie.bin.cfirst; i < trie.bin.last;) {
+            let k = pluck_hash(env.buff, i)
+            i += leng(k)
+            let v = pluck_hash(env.buff, i)
+            i += leng(v)
+            trie.pairs.push([k, v])
+        }
+    })
+    return env
+}
+
 function untwist_bodies(env) {
     env.shapes[BODY].forEach(b => {          // reverse twister all six body parts
         let i = b.bin.cfirst
@@ -103,9 +132,8 @@ function untwist_bodies(env) {
         b.reqs = pluck_hash(env.buff, (i += leng(b.shld)))
         b.rigs = pluck_hash(env.buff, (i += leng(b.reqs)))
         b.carg = pluck_hash(env.buff, (i += leng(b.rigs)))
-        b.rigtrie = pairtrier(b.rigs, env)   // trieify rigs
-        b.cargooo = pairtrier(b.carg, env)
-        b.outies = []
+        b.rigtrie = env.index[b.rigs] || 0
+        b.cargooo = env.index[b.carg] || 0
     })
     return env
 }
@@ -117,9 +145,8 @@ function twist_list(env) {
         if(!t.body) return 0                 // that's going to leave a mark
         t.body.twist = t                     // HACK: could be multiples
         t.innies = []
-        t.outies = t.body.outies
+        t.outies = []
         t.succ = []                          // special cased for simplicity
-
         t.prev = t.body.prev                 // conveniences
         t.teth = t.body.teth
     })
@@ -144,11 +171,11 @@ function get_hitched(env) {
             let meet = env.index[pair[1]]    // HACK: doesn't check hoist
             if(!meet || meet.shape != TWIST) return 0
             if(env.index[pair[0]])           // HACK: doesn't check post
-                return b.outies.push([meet, 'post'])
+                return t.outies.push([meet, 'post'])
             let lead = fastprev(meet)
             if(!lead) return 0
-            b.outies.push([lead, 'lead'])
-            b.outies.push([meet, 'meet'])
+            t.outies.push([lead, 'lead'])
+            t.outies.push([meet, 'meet'])
             lead.innies.push([t, 'leadup'])  // in edges for up direction
             meet.innies.push([t, 'meetup'])
         })
@@ -156,17 +183,30 @@ function get_hitched(env) {
     return env
 }
 
-function body_building(env) {
+function body_building(env) {                // causal relationships are edgy
     env.shapes[TWIST].forEach(t => {
         t.innies = t.innies.concat(t.succ.map(h => [h, "succ"]))
-        t.body.cargooo?.pairs?.flat()?.flatMap(h=>env.index[h])?.filter(t1=>t1?.shape==TWIST)?.forEach(t1 => {
+        t.outies.push.apply(t.outies, [[t.body.prev, "prev"], [t.body.teth, "teth"]].filter(([a,b]) => a))
+
+        let twists = get_twists(t.body.cargooo)
+        twists.forEach(t1 => {
             t.outies.push([t1, "cargo"])
             t1.innies.push([t, "cargoup"])
         })
-        t.outies = t.outies.concat([[t.body.prev, "prev"], [t.body.teth, "teth"]].filter(([a,b]) => a))
     })
-
     return env
+}
+
+function get_twists(a) {
+    if(!a)
+        return []
+    if(a.shape == TWIST)
+        return a
+    if(a.shape == HASHLIST)
+        return a.list.flatMap(h => get_twists(env.index[h]))
+    if(a.shape == PAIRTRIE)
+        return a.pairs.flatMap(([h,j]) => get_twists(env.index[h]).concat(get_twists(env.index[j])))
+    return []
 }
 
 function get_in_line(env) {
@@ -330,21 +370,6 @@ function pluck_length(b, s) {
 
 function leng(h) {
     return h ? h.length/2 : 1                // byte length from hex or 0
-}
-
-function pairtrier(h, env) {
-    let trie = env.index[h]
-    if(!trie) return 0
-    if(trie.shape !== '63') return 0         // don't try to trie a non-trie tree
-    trie.pairs = []
-    for(let i = trie.bin.cfirst; i < trie.bin.last;) {
-        let k = pluck_hash(env.buff, i)
-        i += leng(k)
-        let v = pluck_hash(env.buff, i)
-        i += leng(v)
-        trie.pairs.push([k, v])
-    }
-    return trie
 }
 
 function fastprev(t) {
