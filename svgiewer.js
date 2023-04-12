@@ -79,7 +79,7 @@ function buff_to_rough(env) {
         i += hash.length/2
         let pfirst = i
 
-        let shape = pluck_hex(b, i++, 1)
+        let shape = +pluck_hex(b, i++, 1)
 
         let length = pluck_length(b, i)
         i += 4 + length
@@ -104,7 +104,7 @@ function unroll_lists(env) {
         for (let i = hl.bin.cfirst; i < hl.bin.last;) {
             let k = pluck_hash(env.buff, i)
             i += leng(k)
-            hl.list.push(k)
+            hl.list.push(env.index[k] || k)
         }
     })
     return env
@@ -118,7 +118,7 @@ function unzip_tries(env) {
             i += leng(k)
             let v = pluck_hash(env.buff, i)
             i += leng(v)
-            trie.pairs.push([k, v])
+            trie.pairs.push([env.index[k] || k, env.index[v] || v])
         }
     })
     return env
@@ -171,9 +171,9 @@ function get_hitched(env) {
         if(!b.rigtrie) return 0
         b.rigtrie.pairs.forEach(pair => {
             let t = b.twist
-            let meet = env.index[pair[1]]    // HACK: doesn't check hoist
+            let meet = pair[1]               // HACK: doesn't check hoist
             if(!meet || meet.shape != TWIST) return 0
-            if(env.index[pair[0]])           // HACK: doesn't check post
+            if(pair[0].hash)                 // HACK: doesn't check post
                 return t.outies.push([meet, 'post'])
             let lead = fastprev(meet)
             if(!lead) return 0
@@ -206,9 +206,9 @@ function get_twists(a) {
     if(a.shape == TWIST)
         return a
     if(a.shape == HASHLIST)
-        return a.list.flatMap(h => get_twists(env.index[h]))
+        return a.list.flatMap(a => get_twists(a))
     if(a.shape == PAIRTRIE)
-        return a.pairs.flatMap(([h,j]) => get_twists(env.index[h]).concat(get_twists(env.index[j])))
+        return a.pairs.flatMap(([a,b]) => get_twists(a).concat(get_twists(b)))
     return []
 }
 
@@ -496,9 +496,9 @@ function select_node(id) {
         ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
     dom.classList.add('select')
     let html = ''
-    html += `Twist<pre>${JSON.stringify(t,              strsmasher, 2)}</pre>`
-    html += `Body <pre>${JSON.stringify(t.body,         strsmasher, 2)}</pre>`
-    html += `Cargo<pre>${JSON.stringify(t.body.cargooo, strsmasher, 2)}</pre>`
+    html += `Twist<pre>${JSON.stringify(t,              strsmasher, 1)}</pre>`
+    html += `Body <pre>${JSON.stringify(t.body,         strsmasher, 1)}</pre>`
+    html += `Cargo<pre>${JSON.stringify(t.body.cargooo, strsmasher, 1)}</pre>`
     el('select').innerHTML = hash_munge(html)
     setTimeout(x => show_abject_info(id), 0) // pause for responsiveness
     scroll_to(t.cx, t.cy)
@@ -506,25 +506,27 @@ function select_node(id) {
 
 function strsmasher(k, v) {
     if(['bin', 'x', 'y', 'cx', 'cy', 'colour', 'cargooo'].includes(k))
-        return x=>x
-    if(k === 'innies' || k === 'outies')
+        return x=>x                          // exclude these fields
+    if(k === 'innies' || k === 'outies')     // objects look nicer
         return v.map(v => {return {[v[1]]: v[0]}})
-    if(k === 'pairs')
-        return v.map(v => {return {[reld(v[0])]: reld(v[1])}})
-    return k ? (v?.hash ? v.hash : v) : v
+    if(k === 'pairs')                        // cargo gets rel'd
+        return v.map(v => {return {[reld(v[0])||v[0].hash||v[0]||0]: reld(v[1])||v[1]}})
+    return   !k ? v                          // consume top-level
+           : [TWIST,BODY].includes(v.shape) ? v.hash
+           : v                               // ^ squelch loops
 
     // TODO: unroll context (ie 63 and 61 and 60...)
 }
 
 function reld(v) {
-    return rels?.enlang?.[v] || v
+    return rels?.enlang?.[v]
 }
 
 function hash_munge(str) {                   // beautiful nonsense
     if(!env.emhx && !env.emojis)
         env.emojis = get_me_all_the_emoji()
     return str.replaceAll(/\s*[}{]/g, '')
-              .replaceAll(/"(41.*?)"/g, (m,p) => env.index[p]?.shape !== '48' ? p :
+              .replaceAll(/"(41.*?)"/g, (m,p) => env.index[p]?.shape !== TWIST ? p :
                 `"<a href="" onmouseover="highlight_node('${p}')" onclick="select_node('${p}');return false;">${p}</a>"`)
               .replaceAll(/>41(.*?)</g, (m,p) => env.emhx ? `>41${p}<` : `>${p.match(/.{1,23}/g).map(n=>env.emojis[parseInt(n,16)%env.emojis.length])
               .join('')}<`)
