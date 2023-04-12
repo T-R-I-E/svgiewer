@@ -8,8 +8,10 @@
 
 
 // TODO:
-// svg controls (matrix transform instead of currentTranslate)
 // rels! and transform output with rels
+// unlinked hashes should still be emojied
+// pairs shouldn't overrun the width
+// svg controls (matrix transform instead of currentTranslate)
 // full ADOT runtime
 // more abject details
 // highlight hitches
@@ -19,6 +21,7 @@ import {DQ} from "./src/abject/quantity.js"  // necessary, for some reason
 import { Atoms } from "./src/core/atoms.js"
 import { Twist } from "./src/core/twist.js"
 import { Abject } from "./src/abject/abject.js"
+import { rels } from './rels.js'
 
 const TWIST = 48                             // SHAPES
 const BODY  = 49
@@ -186,7 +189,7 @@ function get_hitched(env) {
 function body_building(env) {                // causal relationships are edgy
     env.shapes[TWIST].forEach(t => {
         t.innies = t.innies.concat(t.succ.map(h => [h, "succ"]))
-        t.outies.push.apply(t.outies, [[t.body.prev, "prev"], [t.body.teth, "teth"]].filter(([a,b]) => a))
+        t.outies = t.outies.concat([[t.body.prev, "prev"], [t.body.teth, "teth"]].filter(([a,b]) => a))
 
         let twists = get_twists(t.body.cargooo)
         twists.forEach(t1 => {
@@ -496,8 +499,6 @@ function select_node(id) {
     html += `Twist<pre>${JSON.stringify(t,              strsmasher, 2)}</pre>`
     html += `Body <pre>${JSON.stringify(t.body,         strsmasher, 2)}</pre>`
     html += `Cargo<pre>${JSON.stringify(t.body.cargooo, strsmasher, 2)}</pre>`
-    // TODO
-    // html = inject_rels(html)
     el('select').innerHTML = hash_munge(html)
     setTimeout(x => show_abject_info(id), 0) // pause for responsiveness
     scroll_to(t.cx, t.cy)
@@ -507,8 +508,16 @@ function strsmasher(k, v) {
     if(['bin', 'x', 'y', 'cx', 'cy', 'colour', 'cargooo'].includes(k))
         return x=>x
     if(k === 'innies' || k === 'outies')
-        return v.map(v => {return {[v[1]]: v[0].hash}})
-    return k ? (v.hash ? v.hash : v) : v
+        return v.map(v => {return {[v[1]]: v[0]}})
+    if(k === 'pairs')
+        return v.map(v => {return {[reld(v[0])]: reld(v[1])}})
+    return k ? (v?.hash ? v.hash : v) : v
+
+    // TODO: unroll context (ie 63 and 61 and 60...)
+}
+
+function reld(v) {
+    return rels?.enlang?.[v] || v
 }
 
 function hash_munge(str) {                   // beautiful nonsense

@@ -1,0 +1,34 @@
+let rels =
+{
+  "enlang": {
+    "2208318633b506017519e9b90b0bdc8451772415ba29144ab7778cb09cc2d2fa6a": "context",
+    "22c70173874680c58e5c1d32854bd10486aac6f1aa821b56e3d512fd72e45ac72e": "poptop",
+    "22a79a7b8b0ee38c196cfefb263cc4a7310d801db8df332e31021267c8c30e1f7c": "SH Simple Historic",
+    "224a77394f604847ace4358961d501d95c19ec9b9572ee877368a274411daf01fb": "SR Simple Rigged",
+    "2297b3532254f96b588fdd7bfe7244ad03355d4de0764373354d7c6b65ac87886e": "Rels",
+    "220f6bc568a5f958111ce3c9d022bb03cf236827303b22b0af9d53eacf886c59ce": "R1",
+    "22310aca6f86516260b3520396c7c55fd395797347844bcd16f2901826e9ee9517": "R1 entity",
+    "22e3cd5d34d6ecebf7be5d9922427d2d82f0fce97d4abb84d21c277c34f4692a25": "R1 field",
+    "2252ddfdca28b6970128e5cdccdb373a2952c7183f572b97408293849d57801de8": "R1 value",
+    "22d29913f7eb9b76f0a1227d0b34465b7adf2236452e20734197e40da790f1f00d": "AC fields (asset class)",
+    "22410489d7e5b4d32f75888c24eb20765342e670fc2616969cbb1fd06e3d3324d5": "AC required (fields)",
+    "22dba83636eaa2a14b9cc219669a4f82b7fe6d08cdd4318b5bfa37d51d47a9bf4f": "AC type (fields)",
+    "2299980d10e44dff83b24b80472098e40ff5fee15d70a3a5d2cfac5c47311929f5": "AC list (fields)",
+    "225c499de98d731839873cd66e4d84532e53162328c377d1b7fc057630d03f0436": "AC consolidation (fields)",
+    "2295df977c3405f37820d6b03f54785c35beba127da5cc3d5ec442206d54656376": "append (consolidation)",
+    "2238cb2d3d05737963c33c391a99b06a3db6d24bbfdc18a00f595d7ab0c386c6e7": "remove (consolidation)",
+    "221d98c3cedd4c0ff12458b2e22d270fcf6f45ca8ffaf64dd8eca957599d3ff562": "last-write-wins (consolidation)",
+    "222276108951a0926d11418a8446b01051177d720227ec2a10bd57c1b4e261f4f3": "first-write-wins (consolidation)",
+    "22eeb6569f77ff73f9ebc1583bddc8308cef7d23ebf41ac29f12d4ad7507f028af": "C1 capability",
+    "222564ba77745b564eada13dc236aef5967969d8e459160c1a02e8846b530798b3": "C1 zing",
+    "220a6a20be9131b708b193e1373aa4df209719e1d3f451836fa62245e4aed234a7": "DQ",
+    "22251dbe656f28f8fd46de35a13c1d74921cb73c1c198800b77eb2417f09435a82": "delegate-initiate",
+    "2246de612f227162a3d60819c45d88ba2d88d74aa86d64f865bf371be5ec8c52f0": "delegate-confirm",
+    "229b2a6d33408bc08d1af4ec63f0fb8e627d6e3b4d3f208e90390c3d8df789de34": "delegate-complete",
+    "229cd0e35e7f233a1c03f620f7c5024baf35c229df81ad613c622996bc1dc4da37": "DQ :: quantity :: float",
+    "220b0bfdd07d701255a52dff626c4a69b7af73e42061857b4b04537542c4e4ea52": "DQ :: minting-info :: DI :: FWW",
+    "2248a88ced3cb2ee7e8187fccc4d70dad8ec75bb8f01b5dbfcdf94ef0ce4fcaea4": "DQ :: units :: float :: FWW",
+  }
+}
+
+export { rels }
