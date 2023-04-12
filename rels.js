@@ -14,6 +14,7 @@ let rels =
     "22438bff6088ea812122de07b4329c5853f1ca9e2bfe8d65c2433c4514f3b8f837": "field-template :: twist",
     "22882f98c8f0396585a5a040258ee7af1fa658b12b323747207a634bfee62b7095": "boxed value value",
     "22f2781cc0020c300c84c3b9bfbe38ceb8949f2c1ced61e29f25c90ff853eb83e4": "float",
+    "22afcfeed9b1c0a28ed7d197f23e7d33272bdb562aa8d9ccf151b8f9767ca09032": "UTF-8",
     "22d29913f7eb9b76f0a1227d0b34465b7adf2236452e20734197e40da790f1f00d": "AC fields (asset class)",
     "22410489d7e5b4d32f75888c24eb20765342e670fc2616969cbb1fd06e3d3324d5": "AC required (fields)",
     "22dba83636eaa2a14b9cc219669a4f82b7fe6d08cdd4318b5bfa37d51d47a9bf4f": "AC type (fields)",

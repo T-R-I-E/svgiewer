@@ -8,14 +8,13 @@
 
 
 // TODO:
-// rels! and transform output with rels
-// unlinked hashes should still be emojied
-// pairs shouldn't overrun the width
+// DQ hacking (display-precision, delegation proof checking optimization)
+// turn hashes back on (check timing)
 // svg controls (matrix transform instead of currentTranslate)
-// full ADOT runtime
-// more abject details
-// highlight hitches
-// check rigs
+// full ADOT runtime?
+// more abject details?
+// highlight hitches?
+// check rigs?
 
 import {DQ} from "./src/abject/quantity.js"  // necessary, for some reason
 import { Atoms } from "./src/core/atoms.js"
@@ -387,16 +386,6 @@ function get(t, label) {
 }
 
 
-function wrap(inn, f, out) {
-    return env => {
-        let val = f(env[inn])                // TODO: cope without inn&out
-        let w = v => (env[out] = v) && env
-        return val.constructor === Promise
-             ? val.then(w)                   // fun made a promise
-             : w(val)                        // TODO: promise back y'all
-    }
-}
-
 function pipe(...funs) {
   function magic_pipe(env={}) {
     let fun, pc=0
@@ -514,8 +503,6 @@ function strsmasher(k, v) {
     return   !k ? v                          // consume top-level
            : [TWIST,BODY].includes(v.shape) ? v.hash
            : v                               // ^ squelch loops
-
-    // TODO: unroll context (ie 63 and 61 and 60...)
 }
 
 function reld(v) {
@@ -523,13 +510,13 @@ function reld(v) {
 }
 
 function hash_munge(str) {                   // beautiful nonsense
-    if(!env.emhx && !env.emojis)
+    if(!env.emhx && !env.emojis)             // global env
         env.emojis = get_me_all_the_emoji()
     return str.replaceAll(/\s*[}{]/g, '')
-              .replaceAll(/"(41.*?)"/g, (m,p) => env.index[p]?.shape !== TWIST ? p :
-                `"<a href="" onmouseover="highlight_node('${p}')" onclick="select_node('${p}');return false;">${p}</a>"`)
-              .replaceAll(/>41(.*?)</g, (m,p) => env.emhx ? `>41${p}<` : `>${p.match(/.{1,23}/g).map(n=>env.emojis[parseInt(n,16)%env.emojis.length])
-              .join('')}<`)
+              .replaceAll(/"(41.*?)"/g, (m,p) => env.index[p]?.shape !== TWIST ? m :
+                `<a href="" onmouseover="highlight_node('${p}')" onclick="select_node('${p}');return false;">"${p}"</a>`)
+              .replaceAll(/"(41|22)(.{64})"/g, (m,p1,p2) => env.emhx ? m :
+                '"'+p1+p2.match(/.{1,23}/g).map(n=>env.emojis[parseInt(n,16)%env.emojis.length]).join('')+'"')
 }
 
 function highlight_node(id) {
