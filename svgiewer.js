@@ -8,8 +8,11 @@
 
 
 // TODO:
-// DQ hacking (display-precision, delegation proof checking optimization)
-// turn hashes back on (check timing)
+// DQ hacking:
+    // display-precision
+    // delegation proof checking optimization
+    // first twist should have zero quantity...
+// turn hashes back on (check timing) -- caching atoms makes this super fast!
 // svg controls (matrix transform instead of currentTranslate)
 // full ADOT runtime?
 // more abject details?
@@ -497,12 +500,12 @@ function strsmasher(k, v) {
     if(['bin', 'x', 'y', 'cx', 'cy', 'colour', 'cargooo'].includes(k))
         return x=>x                          // exclude these fields
     if(k === 'innies' || k === 'outies')     // objects look nicer
-        return v.map(v => {return {[v[1]]: v[0]}})
+        return v.map(v => ({[v[1]] : v[0]}))
     if(k === 'pairs')                        // cargo gets rel'd
-        return v.map(v => {return {[reld(v[0])||v[0].hash||v[0]||0]: reld(v[1])||v[1]}})
-    return   !k ? v                          // consume top-level
-           : [TWIST,BODY].includes(v.shape) ? v.hash
-           : v                               // ^ squelch loops
+        return v.map(v => ({ [reld(v[0]) || v[0].hash || v[0] || 0] : reld(v[1]) || v[1] }))
+    if(k && [TWIST,BODY].includes(v.shape)) // consume top-level
+        return v.hash                       // squelch loops
+    return v
 }
 
 function reld(v) {
@@ -540,13 +543,17 @@ function showhide(id) {
 
 function show_abject_info(id) {
     try {
-        let uint = new Uint8Array(env.buff)
-        let atoms = Atoms.fromBytes(uint)
-        let twist = new Twist(atoms, id)
+        let time = performance.now()
+        if(!env.abject_atoms) {
+            let uint = new Uint8Array(env.buff)
+            env.abject_atoms = Atoms.fromBytes(uint)
+        }
+        let twist = new Twist(env.abject_atoms, id)
         env.abject = Abject.fromTwist(twist)
         env.info = { value: env.abject.value(), quantity: env.abject.getQuantity()
                    , units: env.abject.getUnits() } //, root: env.abject.rootContext()}
-        el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2)
+        time = performance.now() - time
+        el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2) + ` in ${time.toFixed(1)}ms`
     } catch(e) {
         el('abject').innerHTML = 'Not an abject'
     }
