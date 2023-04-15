@@ -302,7 +302,12 @@ function render_svg(env) {
         let fx = e[0].cx, fy = e[0].cy, tx = e[1].cx, ty = e[1].cy
         if(!(fx && fy && tx && ty)) return 0 // also eq successor
         let dashed = e[0].cx < e[1].cx ? 'dashed' : ''
-        edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" class="${e[2]} ${dashed}"/>`
+        if(e[2] === 'teth')
+            edgestr += `<path d="M ${fx} ${fy} Q ${(fx+tx+tx)/3} ${(ty+fy)/2} ${tx} ${ty}" class="${e[2]} ${dashed}"/>`
+        else if(e[2] === 'lead' || e[2] === 'meet')
+            edgestr += `<path d="M ${fx} ${fy} Q ${(fx+fx+tx)/3} ${(ty+fy)/2} ${tx} ${ty}" class="${e[2]} ${dashed}"/>`
+        else
+            edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" class="${e[2]} ${dashed}"/>`
     })
     vp.innerHTML = '<g id="gtag">' + edgestr + svgs + '</g>'
     return env
