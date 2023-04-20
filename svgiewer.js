@@ -27,6 +27,7 @@ import { rels } from './rels.js'
 
 const TWIST = 48                             // SHAPES
 const BODY  = 49
+const ARB   = 60
 const PAIRTRIE = 63
 const HASHLIST = 61
 const el = document.getElementById.bind(document)
@@ -88,8 +89,8 @@ function buff_to_rough(env) {
 
         // set values
         let atom = {shape, hash, bin: {length, afirst, pfirst, cfirst: pfirst+5, last: i-1}}
-        if(env.index[hash]) {                // OPT: this takes 300ms w/ 10k atoms (1M dupes) -- but 500ms w/ Map
-            env.dupes.push(atom)
+        if(env.index[hash]) {                // OPT: this check takes 300ms w/ 10k atoms and 1M dupes,
+            env.dupes.push(atom)             //      but 500ms w/ Map or Set
             continue
         }
         env.atoms.push(atom)
@@ -101,7 +102,7 @@ function buff_to_rough(env) {
 }
 
 function unroll_lists(env) {
-    env.shapes[HASHLIST].forEach(hl => {
+    env.shapes[HASHLIST]?.forEach(hl => {
         hl.list = []
         for (let i = hl.bin.cfirst; i < hl.bin.last;) {
             let k = pluck_hash(env.buff, i)
@@ -510,11 +511,20 @@ function strsmasher(k, v) {
         return v.map(v => ({ [reld(v[0]) || v[0].hash || v[0] || 0] : reld(v[1]) || v[1] }))
     if(k && [TWIST,BODY].includes(v.shape)) // consume top-level
         return v.hash                       // squelch loops
+    if(v.shape === ARB)
+        return arb_to_twever(v) // new DataView(env.buff, v.bin.cfirst).getFloat64()
     return v
 }
 
 function reld(v) {
     return rels?.enlang?.[v]
+}
+
+function arb_to_twever(arb) {
+    let len = arb.bin.last - arb.bin.cfirst + 1
+    if(len === 8)
+        return new DataView(env.buff, arb.bin.cfirst).getFloat64()
+    return (new Uint8Array(env.buff, arb.bin.cfirst, len)).reduce((acc, n) => acc + String.fromCharCode(n), '')
 }
 
 function hash_munge(str) {                   // beautiful nonsense
@@ -554,9 +564,10 @@ function show_abject_info(id) {
             env.abject_atoms = Atoms.fromBytes(uint)
         }
         let twist = new Twist(env.abject_atoms, id)
-        env.abject = Abject.fromTwist(twist)
-        env.info = { value: env.abject.value(), quantity: env.abject.getQuantity()
-                   , units: env.abject.getUnits() } //, root: env.abject.rootContext()}
+        let abject = Abject.fromTwist(twist)
+        env.info = { quantity: abject.quantity, displayPrecision: abject.displayPrecision
+                   , displayValue: DQ.quantityToDisplay(abject.quantity, abject.displayPrecision)
+                   , mintingInfo: abject.mintingInfo } //, root: env.abject.rootContext()}
         time = performance.now() - time
         el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2) + ` in ${time.toFixed(1)}ms`
     } catch(e) {
