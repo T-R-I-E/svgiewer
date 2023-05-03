@@ -25,11 +25,12 @@ import { Twist } from "./src/core/twist.js"
 import { Abject } from "./src/abject/abject.js"
 import { rels } from './rels.js'
 
-const TWIST = 48                             // SHAPES
-const BODY  = 49
-const ARB   = 60
-const PAIRTRIE = 63
-const HASHLIST = 61
+// TODO: THINK: these are expressed as decimal here, but are actually hex...
+const TWIST = 0x48                           // SHAPES
+const BODY  = 0x49
+const ARB   = 0x60
+const PAIRTRIE = 0x63
+const HASHLIST = 0x61
 const el = document.getElementById.bind(document)
 const vp = el('viewport')                    // svg canvas
 let env = {}
@@ -82,7 +83,8 @@ function buff_to_rough(env) {
         i += hash.length/2
         let pfirst = i
 
-        let shape = +pluck_hex(b, i++, 1)
+        let shape = parseInt(pluck_hex(b, i++, 1), 16)
+        // let shape = +pluck_hex(b, i++, 1)
 
         let length = pluck_length(b, i)
         i += 4 + length
@@ -484,8 +486,8 @@ el('todaurl').onchange = function (e) {
 
 function fetch_url(url) {
     return fetch(url)
-        .then(res => showpipe(res.arrayBuffer()))
-        .catch(err => console.error(err))    // stop trying to make fetch happen
+           .then(res => showpipe(res.arrayBuffer()))
+           .catch(err => console.error(err)) // stop trying to make fetch happen
 }
 
 function select_node(id) {
@@ -522,7 +524,7 @@ function reld(v) {
 
 function arb_to_twever(arb) {
     let len = arb.bin.last - arb.bin.cfirst + 1
-    if(len === 8)
+    if(len === 8)                            // hacktastic!
         return new DataView(env.buff, arb.bin.cfirst).getFloat64()
     return (new Uint8Array(env.buff, arb.bin.cfirst, len)).reduce((acc, n) => acc + String.fromCharCode(n), '')
 }
@@ -531,6 +533,7 @@ function hash_munge(str) {                   // beautiful nonsense
     if(!env.emhx && !env.emojis)             // global env
         env.emojis = get_me_all_the_emoji()
     return str.replaceAll(/\s*[}{]/g, '')
+              .replaceAll(/"pairs":/g, '"trie":')
               .replaceAll(/"(41.*?)"/g, (m,p) => env.index[p]?.shape !== TWIST ? m :
                 `<a href="" onmouseover="highlight_node('${p}')" onclick="select_node('${p}');return false;">"${p}"</a>`)
               .replaceAll(/"(41|22)(.{64})"/g, (m,p1,p2) => env.emhx ? m :
@@ -565,6 +568,7 @@ function show_abject_info(id) {
         }
         let twist = new Twist(env.abject_atoms, id)
         let abject = Abject.fromTwist(twist)
+        // abject.checkAllRigs().then(x => console.log(x)).catch(e => console.error(e))
         env.info = { quantity: abject.quantity, displayPrecision: abject.displayPrecision
                    , displayValue: DQ.quantityToDisplay(abject.quantity, abject.displayPrecision)
                    , mintingInfo: abject.mintingInfo } //, root: env.abject.rootContext()}
