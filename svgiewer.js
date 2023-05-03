@@ -59,7 +59,7 @@ let showpipe = pipe( buff_to_env
                    )
 
 function buff_to_env(buff) {
-    env = {buff, atoms:[], dupes:[], index:{}, shapes:{}, errors:[], firsts:[], emojis:0, emhx:1}
+    env = {buff, atoms:[], dupes:[], index:{}, shapes:{}, errors:[], firsts:[], vp:{x:0,y:0,s:1}, emojis:0, emhx:1}
     window.env = env                         // make a global for DOM consumption
     return env
 }
@@ -430,11 +430,10 @@ function pipe(...funs) {
 // DOM things
 
 vp.addEventListener('wheel', e => {
-    let dy = (201+Math.max(-200, Math.min(200, e.deltaY)))/200
-    if((dy < 1 && vp.currentScale < 0.002) || (dy > 1 && vp.currentScale > 200)) return false
-    vp.currentScale *= dy
-    vp.currentTranslate.y = vp.currentTranslate.y * dy + vp.clientWidth * (1 - dy)
-    vp.currentTranslate.x = vp.currentTranslate.x * dy + vp.clientHeight * (1 - dy)
+    let ds = (201+Math.max(-200, Math.min(200, e.deltaY)))/200
+    let s = Math.max(0.02, Math.min(200, env.vp.s * ds))
+    env.vp.s = s                             // global env
+    scroll_to(env.vp.x, env.vp.y)
     return e.preventDefault() || false
 })
 
@@ -451,8 +450,7 @@ vp.addEventListener('mousemove', e => {
         highlight_node(e.target.id)
     }
     if(panning) {
-        vp.currentTranslate.x += e.movementX * 3
-        vp.currentTranslate.y += e.movementY * 3
+        scroll_to(env.vp.x - e.movementX / env.vp.s, env.vp.y - e.movementY / env.vp.s)
     }
 })
 
@@ -549,10 +547,17 @@ function highlight_node(id) {
 }
 
 function scroll_to(x, y) {
-    let MAGIC_CONSTANT = -2                  // ¯\_(ツ)_/¯
-    // let MAGIC_CONSTANT = -2.2             // mysteriously, this value is needed when served from localhost
-    vp.currentTranslate.x = MAGIC_CONSTANT * x * vp.currentScale + vp.clientWidth
-    vp.currentTranslate.y = MAGIC_CONSTANT * y * vp.currentScale + vp.clientHeight
+    env.vp.x = x                             // global env
+    env.vp.y = y
+    let tx = -x * env.vp.s + vp.clientWidth / 2
+    let ty = -y * env.vp.s + vp.clientHeight / 2
+    set_transform(tx, ty, env.vp.s)
+}
+
+function set_transform(x, y, s) {
+    let g = el('gtag')
+    if(!g) return
+    g.setAttribute('transform', `translate(${x},${y}) scale(${s})`)
 }
 
 function showhide(id) {
