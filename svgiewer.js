@@ -134,8 +134,10 @@ function untwist_bodies(env) {
         let i = b.bin.cfirst
         let p = pluck_hash(env.buff, i)      // order is important
         b.prev = env.index[p] || 0           // objectify prev
+        if(p && !b.prev) b.prevhash = p      // display missing prevs
         let t = pluck_hash(env.buff, (i += leng(p)))
         b.teth = env.index[t] || 0           // objectify teth
+        if(t && !b.teth) b.tethhash = t      // display missing teths
         b.shld = pluck_hash(env.buff, (i += leng(t)))
         b.reqs = pluck_hash(env.buff, (i += leng(b.shld)))
         b.rigs = pluck_hash(env.buff, (i += leng(b.reqs)))
