@@ -116,7 +116,7 @@ function unroll_lists(env) {
 }
 
 function unzip_tries(env) {
-    env.shapes[PAIRTRIE].forEach(trie => {
+    env.shapes[PAIRTRIE]?.forEach(trie => {
         trie.pairs = []
         for (let i = trie.bin.cfirst; i < trie.bin.last;) {
             let k = pluck_hash(env.buff, i)
@@ -130,7 +130,7 @@ function unzip_tries(env) {
 }
 
 function untwist_bodies(env) {
-    env.shapes[BODY].forEach(b => {          // reverse twister all six body parts
+    env.shapes[BODY]?.forEach(b => {         // reverse twister all six body parts
         let i = b.bin.cfirst
         let p = pluck_hash(env.buff, i)      // order is important
         b.prev = env.index[p] || 0           // objectify prev
@@ -149,7 +149,7 @@ function untwist_bodies(env) {
 }
 
 function twist_list(env) {
-    env.shapes[TWIST].forEach(t => {
+    env.shapes[TWIST]?.forEach(t => {
         let b = pluck_hash(env.buff, t.bin.cfirst)
         t.body = env.index[b] || 0
         if(!t.body) return 0                 // that's going to leave a mark
@@ -164,7 +164,7 @@ function twist_list(env) {
 }
 
 function have_successors(env) {
-    env.shapes[TWIST].forEach(t => {         // seperate phase so everything will .succ
+    env.shapes[TWIST]?.forEach(t => {        // seperate phase so everything will .succ
         if(!t.prev) return 0
         t.prev.succ.push(t)                  // HACK: doesn't check legitimacy
         if(t.prev.succ.length > 1)
@@ -174,7 +174,7 @@ function have_successors(env) {
 }
 
 function get_hitched(env) {
-    env.shapes[BODY].forEach(b => {          // slurps out connections. cheats a lot.
+    env.shapes[BODY]?.forEach(b => {         // slurps out connections. cheats a lot.
         if(!b.rigtrie) return 0
         b.rigtrie.pairs.forEach(pair => {
             let t = b.twist
@@ -194,7 +194,7 @@ function get_hitched(env) {
 }
 
 function body_building(env) {                // causal relationships are edgy
-    env.shapes[TWIST].forEach(t => {
+    env.shapes[TWIST]?.forEach(t => {
         t.innies = t.innies.concat(t.succ.map(h => [h, "succ"]))
         t.outies = t.outies.concat([[t.body.prev, "prev"], [t.body.teth, "teth"]].filter(([a,b]) => a))
 
@@ -220,7 +220,7 @@ function get_twists(a) {
 }
 
 function get_in_line(env) {
-    env.shapes[TWIST].forEach(t => {
+    env.shapes[TWIST]?.forEach(t => {
         [t.first, t.findex] = get_first(t)
         if(!t.findex)
             env.firsts.push(t)               // a DAG root in this bag of atoms
@@ -270,7 +270,7 @@ function plonk_twists(env) {
 }
 
 function decorate_twists(env) {
-    env.shapes[TWIST].forEach(t => {
+    env.shapes[TWIST]?.forEach(t => {
         t.cx = t.x
         t.cy = 400 - t.first.y * 30
         t.colour = t.first.hash.slice(2, 8)
@@ -285,7 +285,7 @@ function end_timer(env) {
 
 function set_limits(env) {
     let l = env.limits = {minx: Infinity, manx: -Infinity, miny: Infinity, many: -Infinity}
-    env.shapes[TWIST].forEach(t => {
+    env.shapes[TWIST]?.forEach(t => {
         if (t.cx < l.minx) l.minx = t.cx;
         if (t.cx > l.manx) l.manx = t.cx;
         if (t.cy < l.miny) l.miny = t.cy;
@@ -297,7 +297,7 @@ function set_limits(env) {
 function render_svg(env) {
     let svgs = '', edgestr = '', edges = []
     let order = ['prev', 'teth', 'lead', 'meet', 'post', 'cargo']
-    env.shapes[TWIST].forEach(t => {
+    env.shapes[TWIST]?.forEach(t => {
         if(!t.cx) return 0                   // ignore equivocal successors
         svgs += `<circle cx="${t.cx}" cy="${t.cy}" r="5" fill="#${t.colour}" id="${t.hash}" />`
         edges = edges.concat(t.outies.map(o => [t, o[0], o[1]]))
@@ -319,6 +319,8 @@ function render_svg(env) {
 }
 
 function select_focus(env) {
+    if(!env.shapes[TWIST])
+        el('stats').innerHTML = 'There are no twists in this file!'
     env.focus = env.shapes[TWIST][env.shapes[TWIST].length-1]
     el(env.focus.hash).classList.add('focus')
     select_node(env.focus.hash)
