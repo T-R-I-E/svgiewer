@@ -24,6 +24,8 @@ import { Atoms } from "./src/core/atoms.js"
 import { Twist } from "./src/core/twist.js"
 import { Abject } from "./src/abject/abject.js"
 import { rels } from './rels.js'
+// to activate the SECP stuff?
+// import { SECP256r1 } from "./src/client/secp256r1.js"
 
 // TODO: THINK: these are expressed as decimal here, but are actually hex...
 const TWIST = 0x48                           // SHAPES
@@ -356,10 +358,7 @@ function pause(env) {
 
 // helpers
 
-let hexes = hexes_helper()
-function hexes_helper() {
-    return Array.from(Array(256)).map((n,i)=>i.toString(16).padStart(2, '0'))
-}
+let hexes = Array.from(Array(256)).map((n,i)=>i.toString(16).padStart(2, '0'))
 
 function pluck_hex(b, s, l) {                // requires hexes helper
     let hex = ''
@@ -539,7 +538,7 @@ function hash_munge(str) {                   // beautiful nonsense
               .replaceAll(/"(41.*?)"/g, (m,p) => env.index[p]?.shape !== TWIST ? m :
                 `<a href="" onmouseover="highlight_node('${p}')" onclick="select_node('${p}');return false;">"${p}"</a>`)
               .replaceAll(/"(41|22)(.{64})"/g, (m,p1,p2) => env.emhx ? m :
-                '"'+p1+p2.match(/.{1,23}/g).map(n=>env.emojis[parseInt(n,16)%env.emojis.length]).join('')+'"')
+                '"'+p2.match(/.{1,23}/g).map(n=>env.emojis[parseInt(n,16)%env.emojis.length]).join('')+'"')
 }
 
 function highlight_node(id) {
