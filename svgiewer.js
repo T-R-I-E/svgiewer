@@ -664,6 +664,8 @@ let url = window.location.hash.slice(1)
 if(url) {
     el('todaurl').value = url
     fetch_url(url)
+} else {
+    fetch_url('dq.toda')
 }
 
 // experimental dump slurp func
