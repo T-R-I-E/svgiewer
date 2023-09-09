@@ -19,15 +19,14 @@
 // highlight hitches?
 // check rigs?
 
-import {DQ} from "./src/abject/quantity.js"  // necessary, for some reason
-import { Atoms } from "./src/core/atoms.js"
-import { Twist } from "./src/core/twist.js"
-import { Abject } from "./src/abject/abject.js"
+import { DQ } from './src/abject/quantity.js'  // necessary, for some reason
+import { Atoms } from './src/core/atoms.js'
+import { Twist } from './src/core/twist.js'
+import { Abject } from './src/abject/abject.js'
 import { rels } from './rels.js'
-// to activate the SECP stuff?
-// import { SECP256r1 } from "./src/client/secp256r1.js"
+// for the rigchecker:
+import { SECP256r1 } from './src/client/secp256r1.js'
 
-// TODO: THINK: these are expressed as decimal here, but are actually hex...
 const TWIST = 0x48                           // SHAPES
 const BODY  = 0x49
 const ARB   = 0x60
@@ -86,7 +85,6 @@ function buff_to_rough(env) {
         let pfirst = i
 
         let shape = parseInt(pluck_hex(b, i++, 1), 16)
-        // let shape = +pluck_hex(b, i++, 1)
 
         let length = pluck_length(b, i)
         i += 4 + length
@@ -501,7 +499,8 @@ function select_node(id) {
     html += `Body <pre>${JSON.stringify(t.body,         strsmasher, 1)}</pre>`
     html += `Cargo<pre>${JSON.stringify(t.body.cargooo, strsmasher, 1)}</pre>`
     el('select').innerHTML = hash_munge(html)
-    setTimeout(x => show_abject_info(id), 0) // pause for responsiveness
+    // setTimeout(x => show_abject_info(id), 0) // pause for responsiveness
+    show_abject_info(id)
     scroll_to(t.cx, t.cy)
 }
 
@@ -515,7 +514,7 @@ function strsmasher(k, v) {
     if(k && [TWIST,BODY].includes(v.shape)) // consume top-level
         return v.hash                       // squelch loops
     if(v.shape === ARB)
-        return arb_to_twever(v) // new DataView(env.buff, v.bin.cfirst).getFloat64()
+        return arb_to_twever(v)
     return v
 }
 
@@ -569,6 +568,7 @@ function showhide(id) {
 
 function show_abject_info(id) {
     try {
+        el('rigcheck').innerHTML = ''
         let time = performance.now()
         if(!env.abject_atoms) {
             let uint = new Uint8Array(env.buff)
@@ -576,14 +576,22 @@ function show_abject_info(id) {
         }
         let twist = new Twist(env.abject_atoms, id)
         let abject = Abject.fromTwist(twist)
-        // abject.checkAllRigs().then(x => console.log(x)).catch(e => console.error(e))
+
         env.info = { quantity: abject.quantity, displayPrecision: abject.displayPrecision
                    , displayValue: DQ.quantityToDisplay(abject.quantity, abject.displayPrecision)
                    , mintingInfo: abject.mintingInfo } //, root: env.abject.rootContext()}
-        time = performance.now() - time
-        el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2) + ` in ${time.toFixed(1)}ms`
+        let newtime = performance.now()
+        el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2) + ` in ${(newtime-time).toFixed(1)}ms`
+
+        abject.checkAllRigs().then(_ => {
+            el('rigcheck').innerHTML = `Rigs checked successfully in ${(performance.now()-newtime).toFixed(1)}ms!`
+        }).catch(e => {
+            el('rigcheck').innerHTML = `Rig check failed, consuming ${(performance.now()-newtime).toFixed(1)}ms of precious battery life`
+            console.error(e)
+        })
     } catch(e) {
         el('abject').innerHTML = 'Not an abject'
+        el('rigcheck').innerHTML = ''
     }
 }
 
@@ -648,6 +656,7 @@ window.download_svg = download_svg
 window.select_node = select_node
 window.showhide = showhide
 window.emojex = emojex
+window.slurp = slurp
 
 
 // init
@@ -655,4 +664,54 @@ let url = window.location.hash.slice(1)
 if(url) {
     el('todaurl').value = url
     fetch_url(url)
+}
+
+// experimental dump slurp func
+function slurp(url, hashes) {
+    let slurped = {}
+    let waiting = 0
+    let byteslist = []
+
+    hashes.forEach(go)
+
+    function go(hash) {
+        if (slurped[hash]) return false
+        slurped[hash] = true
+        waiting++
+        let furl = url + '/' + hash + '.next.toda'
+        fetch(furl)
+        .then(res => res.arrayBuffer())
+        .then(buff => get_hashes(buff))
+        .then(hashes => hashes.forEach(go))
+        .then(_ => --waiting ? 0 : showpipe(concatter(byteslist)))
+        // .catch(e => e)
+    }
+
+    function concatter(byteslist) {
+        return (new Uint8Array(byteslist)).buffer
+    }
+
+    function get_hashes(buff) {
+        let hashes = []
+        let uints = new Uint8Array(buff) // TODO: unify uint/uints
+        if(uints[0] !== 0x41) {
+            // console.error(buff)
+            return []
+        }
+        byteslist.push.apply(byteslist, [...uints])
+
+        for(let i=0, l=uints.length-32; i<l; i++)
+            if(uints[i] === 0x41)
+                hashes.push(pluck_hash(buff, i))
+
+        return hashes
+    }
+
+    // get all the hashes
+    // add them to done
+    // get all their hashes
+    // filter by done
+    // when no hashes smoosh buffers and call showpipe
+
+    // - in the future, render iteratively...
 }
