@@ -255,7 +255,7 @@ function stack_lines(env) {                  // one-pass line aligner, B- for sp
 
 
 function plonk_twists(env) {
-    let x = 0, gas = 1000000, mind = 20      // gas gets us unstuck if this all goes wrong
+    let x = 0, gas = 5000000, mind = 20      // gas gets us unstuck if this all goes wrong
     let lines = env.firsts.slice().reverse()
     while(lines.length) {                    // outies all required before plonking
         lines = lines.map(t => {
