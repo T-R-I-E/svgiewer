@@ -387,10 +387,13 @@ function leng(h) {
 }
 
 function fastprev(t) {
-    if(!t.prev) return 0
-    if(t.prev.teth)
-        return t.prev
-    return fastprev(t.prev)
+    while(t.prev) {
+        if (t.prev.teth)
+            return t.prev
+        t = t.prev
+    }
+    return 0
+    // return fastprev(t.prev)
 }
 
 function get(t, label) {
