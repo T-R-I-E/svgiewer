@@ -314,7 +314,56 @@ function render_svg(env) {
         else
             edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" class="${e[2]} ${dashed}"/>`
     })
-    vp.innerHTML = '<g id="gtag">' + edgestr + svgs + '</g>'
+    
+    // Create two separate layers - graph content and legend
+    vp.innerHTML = `
+        <g id="gtag">${edgestr}${svgs}</g>
+        <g id="svg-color-legend">
+            <rect id="legend-bg" x="0" y="0" width="120" height="220" rx="5" ry="5" class="legend-background"></rect>
+            <text x="10" y="20" class="legend-title">Stroke Colors</text>
+            
+            <!-- Default -->
+            <line x1="10" y1="35" x2="30" y2="35" stroke="var(--stroke-default)" stroke-width="2"></line>
+            <text x="40" y="40" class="legend-text">Default</text>
+            
+            <!-- Previous -->
+            <line x1="10" y1="55" x2="30" y2="55" stroke="var(--stroke-prev)" stroke-width="2"></line>
+            <text x="40" y="60" class="legend-text">Previous</text>
+            
+            <!-- Teth -->
+            <line x1="10" y1="75" x2="30" y2="75" stroke="var(--stroke-teth)" stroke-width="2"></line>
+            <text x="40" y="80" class="legend-text">Teth</text>
+            
+            <!-- Lead -->
+            <line x1="10" y1="95" x2="30" y2="95" stroke="var(--stroke-lead)" stroke-width="2"></line>
+            <text x="40" y="100" class="legend-text">Lead</text>
+            
+            <!-- Meet -->
+            <line x1="10" y1="115" x2="30" y2="115" stroke="var(--stroke-meet)" stroke-width="2"></line>
+            <text x="40" y="120" class="legend-text">Meet</text>
+            
+            <!-- Post -->
+            <line x1="10" y1="135" x2="30" y2="135" stroke="var(--stroke-post)" stroke-width="2"></line>
+            <text x="40" y="140" class="legend-text">Post</text>
+            
+            <!-- Cargo -->
+            <line x1="10" y1="155" x2="30" y2="155" stroke="var(--stroke-cargo)" stroke-width="2"></line>
+            <text x="40" y="160" class="legend-text">Cargo</text>
+            
+            <!-- Focus -->
+            <line x1="10" y1="175" x2="30" y2="175" stroke="var(--stroke-focus)" stroke-width="2"></line>
+            <text x="40" y="180" class="legend-text">Focus</text>
+            
+            <!-- Highlight -->
+            <line x1="10" y1="195" x2="30" y2="195" stroke="var(--stroke-highlight)" stroke-width="2"></line>
+            <text x="40" y="200" class="legend-text">Highlight</text>
+            
+            <!-- Select -->
+            <line x1="10" y1="215" x2="30" y2="215" stroke="var(--stroke-select)" stroke-width="2"></line>
+            <text x="40" y="220" class="legend-text">Select</text>
+        </g>
+    `
+    position_legend()
     return env
 }
 
@@ -720,3 +769,24 @@ function slurp(url, hashes) {
 
     // - in the future, render iteratively...
 }
+
+function position_legend() {
+    const svg = document.getElementById('viewport')
+    let legend = document.getElementById('svg-color-legend')
+    
+    if (svg && legend) {
+        // Get SVG viewport dimensions
+        const viewportWidth = svg.clientWidth || svg.getBoundingClientRect().width
+        const viewportHeight = svg.clientHeight || svg.getBoundingClientRect().height
+        
+        // Set position to bottom right with padding
+        const padding = 20
+        legend.setAttribute('transform', `translate(${viewportWidth - 140 - padding}, ${viewportHeight - 240 - padding})`)
+        
+        // Ensure legend stays on top by moving it to be the last child of the SVG
+        svg.appendChild(legend)
+    }
+}
+
+// Add window resize listener to reposition legend
+window.addEventListener('resize', position_legend)

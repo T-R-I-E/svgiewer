@@ -126,28 +126,23 @@ path {
 }
 
 /* Color Legend Styles */
-#color-legend {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background-color: rgba(255, 255, 255, 0.9);
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    padding: 10px;
+#svg-color-legend {
+    /* This will be positioned in JavaScript */
+    pointer-events: none; /* Allows clicking through the legend to the graph */
+}
+
+.legend-background {
+    fill: rgba(255, 255, 255, 0.9);
+    stroke: #ccc;
+    stroke-width: 1;
+}
+
+.legend-title {
     font-size: 12px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    z-index: 1000;
+    font-weight: bold;
 }
 
-.legend-item {
-    display: flex;
-    align-items: center;
-    margin-bottom: 5px;
-}
-
-.color-swatch {
-    width: 20px;
-    height: 10px;
-    margin-right: 8px;
-    border: 1px solid #ddd;
+.legend-text {
+    font-size: 10px;
+    font-family: sans-serif;
 }

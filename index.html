@@ -9,7 +9,10 @@
 </head>
 <body>
     <div id="outer">
-        <svg id="viewport"></svg>
+        <svg id="viewport">
+            <!-- Main graph will be here -->
+            <!-- Legend will be added programmatically as a separate layer -->
+        </svg>
         <div id="sidebar">
             <h2>TODA File Analysis Tool</h2>
             <p><em>For very serious use only</em></p>
@@ -28,50 +31,6 @@
             <div id="select"></div>
         </div>
         <script async src="svgiewer.js" type="module"></script>
-    </div>
-    
-    <div id="color-legend">
-        <h4 style="margin-top: 0; margin-bottom: 8px;">Stroke Colors</h4>
-        <div class="legend-item">
-            <div class="color-swatch" style="background-color: var(--stroke-default);"></div>
-            <span>Default</span>
-        </div>
-        <div class="legend-item">
-            <div class="color-swatch" style="background-color: var(--stroke-prev);"></div>
-            <span>Previous</span>
-        </div>
-        <div class="legend-item">
-            <div class="color-swatch" style="background-color: var(--stroke-teth);"></div>
-            <span>Teth</span>
-        </div>
-        <div class="legend-item">
-            <div class="color-swatch" style="background-color: var(--stroke-lead);"></div>
-            <span>Lead</span>
-        </div>
-        <div class="legend-item">
-            <div class="color-swatch" style="background-color: var(--stroke-meet);"></div>
-            <span>Meet</span>
-        </div>
-        <div class="legend-item">
-            <div class="color-swatch" style="background-color: var(--stroke-post);"></div>
-            <span>Post</span>
-        </div>
-        <div class="legend-item">
-            <div class="color-swatch" style="background-color: var(--stroke-cargo);"></div>
-            <span>Cargo</span>
-        </div>
-        <div class="legend-item">
-            <div class="color-swatch" style="background-color: var(--stroke-focus);"></div>
-            <span>Focus</span>
-        </div>
-        <div class="legend-item">
-            <div class="color-swatch" style="background-color: var(--stroke-highlight);"></div>
-            <span>Highlight</span>
-        </div>
-        <div class="legend-item">
-            <div class="color-swatch" style="background-color: var(--stroke-select);"></div>
-            <span>Select</span>
-        </div>
     </div>
 </body>
 </html>
