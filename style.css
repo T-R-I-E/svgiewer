@@ -128,7 +128,10 @@ path {
 /* Color Legend Styles */
 #svg-color-legend {
     /* This will be positioned in JavaScript */
-    pointer-events: none; /* Allows clicking through the legend to the graph */
+    pointer-events: auto; /* Allow interaction with the legend */
+    cursor: pointer;
+    opacity: 70%;
+    transition: opacity 0.3s ease;
 }
 
 .legend-background {
@@ -145,4 +148,31 @@ path {
 .legend-text {
     font-size: 10px;
     font-family: sans-serif;
+}
+
+/* Hamburger icon styles */
+.legend-hamburger {
+    cursor: pointer;
+    opacity: 1;
+    transition: all 0.3s ease;
+}
+
+.legend-hamburger:hover .legend-background {
+    fill: rgba(235, 235, 255, 0.95);
+    stroke: #999;
+    stroke-width: 2;
+    filter: drop-shadow(0px 0px 3px rgba(0,0,0,0.2));
+}
+
+/* Collapsed and expanded states */
+.legend-collapsed .legend-content {
+    display: none;
+}
+
+.legend-collapsed .legend-hamburger {
+    display: block;
+}
+
+#svg-color-legend:not(.legend-collapsed) .legend-hamburger {
+    display: none;
 }
