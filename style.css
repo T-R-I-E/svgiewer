@@ -134,10 +134,18 @@ path {
     transition: opacity 0.3s ease;
 }
 
+#svg-color-legend:hover {
+    opacity: 95%;
+}
+
 .legend-background {
     fill: rgba(255, 255, 255, 0.9);
     stroke: #ccc;
     stroke-width: 1;
+}
+
+.legend-content {
+    cursor: pointer;
 }
 
 .legend-title {

@@ -327,8 +327,8 @@ function render_svg(env) {
                 <line x1="10" y1="28" x2="30" y2="28" stroke="var(--stroke-default)" stroke-width="3"></line>
             </g>
             
-            <!-- Expanded legend content -->
-            <g id="legend-content" class="legend-content">
+            <!-- Expanded legend content - add onclick to collapse it -->
+            <g id="legend-content" class="legend-content" onclick="toggleLegend()">
                 <rect id="legend-bg" x="0" y="0" width="120" height="230" rx="5" ry="5" class="legend-background"></rect>
                 <text x="10" y="20" class="legend-title">Stroke Colours</text>
                 
