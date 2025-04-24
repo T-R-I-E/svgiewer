@@ -5,121 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TODA File Explorer</title>
-    <style id="style">
-        #outer {
-            display: flex;
-            height: 100vh;
-        }
-        svg {
-            background-color: rgb(239, 255, 250);
-            flex-grow: 100;
-        }
-        circle {
-            stroke: #000;
-            stroke-width: 1;
-        }
-        path {
-            fill: none;
-        }
-        .prev {
-            stroke: #999;
-            stroke-linecap: butt;
-        }
-        .teth {
-            stroke: #f9f;
-            stroke-linecap: butt;
-        }
-        .lead {
-            stroke: rgb(61, 255, 51);
-            stroke-linecap: butt;
-        }
-        .meet {
-            stroke: #86f;
-            stroke-linecap: butt;
-        }
-        .post {
-            stroke: rgb(255, 174, 60);
-            stroke-linecap: butt;
-        }
-        .cargo {
-            stroke: rgb(255, 0, 0);
-            stroke-linecap: butt;
-        }
-        .dashed {
-            stroke-dasharray: 3;
-        }
-        .focus {
-            r: 9;
-            stroke-width: 4;
-            stroke:#ff17c9
-        }
-        .highlight {
-            r: 8;
-            stroke-width: 4;
-            stroke-opacity: 50%;
-            stroke: yellow;
-        }
-        .select {
-            r: 8;
-            fill-opacity: 50%;
-            stroke-width: 3;
-            stroke: rgb(0, 255, 60);
-        }
-        #sidebar {
-            float: right;
-            overflow: scroll;
-            max-width: 50%;
-        }
-        .hidden {
-            display: none;
-        }
-        .nodesparkles {
-            animation: rainbow 5071ms infinite;
-        }
-        .rainbowsparkles {
-            animation: sparkle 3s infinite alternate ease-in-out;
-        }
-        @keyframes rainbow {
-            0% {
-            }
-            20% {
-                filter: hue-rotate(90deg) drop-shadow(16px 16px 20px blue) brightness(2) saturate(200%);
-            }
-            70% {
-                filter: hue-rotate(120deg) blur(1px) brightness(3) saturate(300%);
-                r: 12;
-            }
-            100% {
-                filter: hue-rotate(200deg);
-                r: 9
-            }
-        }
-        @keyframes sparkle {
-            0% {
-                stroke-dasharray: 1px;
-                stroke-dashoffset: 0%;
-            }
-            50% {
-                stroke-dasharray: 30px;
-                stroke-opacity: 50%;
-                stroke-width: 5;
-                stroke-dashoffset: 15%;
-                filter: hue-rotate(90deg);
-            }
-            80% {
-                stroke-dasharray: 8px;
-                stroke-width: 2;
-                stroke-dashoffset: 10%;
-                filter: hue-rotate(180deg);
-            }
-            100% {
-                stroke-dasharray: 17px;
-                stroke-width: 3;
-                stroke-dashoffset: 30%;
-                filter: hue-rotate(2700deg);
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="outer">
@@ -142,6 +28,50 @@
             <div id="select"></div>
         </div>
         <script async src="svgiewer.js" type="module"></script>
+    </div>
+    
+    <div id="color-legend">
+        <h4 style="margin-top: 0; margin-bottom: 8px;">Stroke Colors</h4>
+        <div class="legend-item">
+            <div class="color-swatch" style="background-color: var(--stroke-default);"></div>
+            <span>Default</span>
+        </div>
+        <div class="legend-item">
+            <div class="color-swatch" style="background-color: var(--stroke-prev);"></div>
+            <span>Previous</span>
+        </div>
+        <div class="legend-item">
+            <div class="color-swatch" style="background-color: var(--stroke-teth);"></div>
+            <span>Teth</span>
+        </div>
+        <div class="legend-item">
+            <div class="color-swatch" style="background-color: var(--stroke-lead);"></div>
+            <span>Lead</span>
+        </div>
+        <div class="legend-item">
+            <div class="color-swatch" style="background-color: var(--stroke-meet);"></div>
+            <span>Meet</span>
+        </div>
+        <div class="legend-item">
+            <div class="color-swatch" style="background-color: var(--stroke-post);"></div>
+            <span>Post</span>
+        </div>
+        <div class="legend-item">
+            <div class="color-swatch" style="background-color: var(--stroke-cargo);"></div>
+            <span>Cargo</span>
+        </div>
+        <div class="legend-item">
+            <div class="color-swatch" style="background-color: var(--stroke-focus);"></div>
+            <span>Focus</span>
+        </div>
+        <div class="legend-item">
+            <div class="color-swatch" style="background-color: var(--stroke-highlight);"></div>
+            <span>Highlight</span>
+        </div>
+        <div class="legend-item">
+            <div class="color-swatch" style="background-color: var(--stroke-select);"></div>
+            <span>Select</span>
+        </div>
     </div>
 </body>
 </html>
