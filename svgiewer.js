@@ -319,7 +319,7 @@ function render_svg(env) {
     vp.innerHTML = `
         <g id="gtag">${edgestr}${svgs}</g>
         <g id="svg-color-legend">
-            <rect id="legend-bg" x="0" y="0" width="120" height="220" rx="5" ry="5" class="legend-background"></rect>
+            <rect id="legend-bg" x="0" y="0" width="120" height="230" rx="5" ry="5" class="legend-background"></rect>
             <text x="10" y="20" class="legend-title">Stroke Colors</text>
             
             <!-- Default -->
@@ -780,8 +780,8 @@ function position_legend() {
         const viewportHeight = svg.clientHeight || svg.getBoundingClientRect().height
         
         // Set position to bottom right with padding
-        const padding = 20
-        legend.setAttribute('transform', `translate(${viewportWidth - 140 - padding}, ${viewportHeight - 240 - padding})`)
+        const padding = 5
+        legend.setAttribute('transform', `translate(${viewportWidth - 120 - padding}, ${viewportHeight - 230 - padding})`)
         
         // Ensure legend stays on top by moving it to be the last child of the SVG
         svg.appendChild(legend)

@@ -73,7 +73,7 @@ path {
 #sidebar {
     float: right;
     overflow: scroll;
-    max-width: 50%;
+    width: 50%;
 }
 .hidden {
     display: none;
