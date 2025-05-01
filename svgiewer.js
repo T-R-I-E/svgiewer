@@ -485,6 +485,12 @@ el('todaurl').onchange = function (e) {
     fetch_url(url)
 }
 
+el('search').onchange = function (e) {
+    const id = e.target.value;
+    if (!env.index?.[id]) return;
+    select_node(id);
+}
+
 // DOM helpers
 
 function fetch_url(url) {
