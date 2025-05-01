@@ -139,6 +139,7 @@ function untwist_bodies(env) {
         b.teth = env.index[t] || 0           // objectify teth
         if(t && !b.teth) b.tethhash = t      // display missing teths
         b.shld = pluck_hash(env.buff, (i += leng(t)))
+        if (b.shld) b.shldInFile = env.atoms.find(x => x?.hash == b.shld) ? "true" : "false"
         b.reqs = pluck_hash(env.buff, (i += leng(b.shld)))
         b.rigs = pluck_hash(env.buff, (i += leng(b.reqs)))
         b.carg = pluck_hash(env.buff, (i += leng(b.rigs)))
