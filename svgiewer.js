@@ -19,10 +19,13 @@
 // highlight hitches?
 // check rigs?
 
+import { Abject } from './src/abject/abject.js'
+import { DelegableActionable } from './src/abject/actionable.js'
 import { DQ } from './src/abject/quantity.js'  // necessary, for some reason
 import { Atoms } from './src/core/atoms.js'
+import { Interpreter } from './src/core/interpret.js'
+import { Line } from './src/core/line.js'
 import { Twist } from './src/core/twist.js'
-import { Abject } from './src/abject/abject.js'
 import { rels } from './rels.js'
 // for the rigchecker:
 import { SECP256r1 } from './src/client/secp256r1.js'
@@ -595,10 +598,64 @@ function show_abject_info(id) {
 
         abject.checkAllRigs().then(_ => {
             el('rigcheck').innerHTML = `Rigs checked successfully in ${(performance.now()-newtime).toFixed(1)}ms!`
+        }).catch(_ => {
+            // XXX(sfertman): BEGIN ~~ TODA INSTANT REALAY CERTIFIED HACK ~~
+            class TwinInterpreter extends Interpreter { // copied from toda-verify/toda
+                getAllTethers() {
+                    let tethers = [];
+                    let prevTwist = this.line.twist(this.line.latestTwist());
+                    let abj;
+                    try {
+                        abj = Abject.fromTwist(prevTwist);
+                    } catch (e) { }
+
+                    while (prevTwist) {
+                        if (prevTwist.getTetherHash()) {
+                            tethers.push(prevTwist.getTetherHash());
+                        }
+                        prevTwist = prevTwist.prev();
+                    }
+
+                    if (abj && abj instanceof DelegableActionable) {
+                        for (let delegate of abj.delegationChain()) {
+                            prevTwist = new Twist(abj.atoms, delegate.twistHash);
+                            while (prevTwist) {
+                                if (prevTwist.getTetherHash()) {
+                                    tethers.push(prevTwist.getTetherHash());
+                                }
+                                prevTwist = prevTwist.prev();
+                            }
+                        }
+                    }
+                    return tethers;
+                }
+                
+                isTopline(hash) {
+                    if (this.line.colinear(hash, this.topHash)) {
+                        return true;
+                    }
+                    for (let tether of this.getAllTethers()) {
+                        if (this.line.colinear(hash, tether)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            }
+            
+            DelegableActionable.prototype._constructInterpreter = function () {
+                return new TwinInterpreter(new Twist(this.atoms, this.twistHash), this.popTop());
+            };
+              
+            const ti = new TwinInterpreter(Line.fromTwist(twist), abject.popTop());
+            return ti.verifyTopline()
+                .then(_ => ti.verifyHitchLine(twist.getHash()))
+                .then(_ => el('rigcheck').innerHTML = `Integrity certified by TodaQ instant relay in ${(performance.now()-newtime).toFixed(1)}ms!`)
+            //XXX(sfertman): END ~~ TODA INSTANT REALAY CERTIFIED HACK ~~
         }).catch(e => {
             el('rigcheck').innerHTML = `Rig check failed, consuming ${(performance.now()-newtime).toFixed(1)}ms of precious battery life`
             console.error(e)
-        })
+        });
     } catch(e) {
         el('abject').innerHTML = 'Not an abject'
         el('rigcheck').innerHTML = ''
