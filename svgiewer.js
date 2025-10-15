@@ -142,7 +142,7 @@ function untwist_bodies(env) {
         b.teth = env.index[t] || 0           // objectify teth
         if(t && !b.teth) b.tethhash = t      // display missing teths
         b.shld = pluck_hash(env.buff, (i += leng(t)))
-        if (b.shld) b.shldInFile = env.atoms.find(x => x?.hash == b.shld) ? "true" : "false"
+        b.shwn = +env.atoms.some(x => x?.hash === b.shld)
         b.reqs = pluck_hash(env.buff, (i += leng(b.shld)))
         b.rigs = pluck_hash(env.buff, (i += leng(b.reqs)))
         b.carg = pluck_hash(env.buff, (i += leng(b.rigs)))
@@ -403,7 +403,7 @@ function write_stats(env) {
         and <a href="" onclick="showhide('errors');return false">${env.errors.length.toLocaleString()} errors</a>. </p>
      <p><a href="" onclick="emojex();return false">emoji/hex</a>
         <a href="" onclick="rainbowsparkles();return false">rainbow/sparkles</a>
-        <a href="" onclick="download_svg();return false">download as svg</a> </p>
+        <a href="" onclick="download_svg();return false">download svg</a> </p>
      <div id="errors" class="hidden"><p>${hash_munge(env.errors.map(e=>e.message).join('</p><p>'))}</p></div>`
     return env
 }
@@ -420,7 +420,7 @@ function pause(env) {
 
 // helpers
 
-let hexes = Array.from(Array(256)).map((n,i)=>i.toString(16).padStart(2, '0'))
+let hexes = Array.from(Array(256)).map((_,i)=>i.toString(16).padStart(2, '0'))
 
 function pluck_hex(b, s, l) {                // requires hexes helper
     let hex = ''
@@ -537,21 +537,22 @@ window.addEventListener('keydown', e => {
         select_node(t.succ[0]?.hash)
 })
 
-el('todafile').onchange = function (t) {
+el('todafile').oninput = function (t) {
     let file = t.srcElement.files?.[0]
     showpipe(file.arrayBuffer())
 }
 
-el('todaurl').onchange = function (e) {
+el('todaurl').oninput = function (e) {
     let url = e.target.value.trim()
     window.location.hash = url
     fetch_url(url)
 }
 
-el('search').onchange = function (e) {
-    const id = e.target.value;
-    if (!env.index?.[id]) return;
-    select_node(id);
+el('search').oninput = function (e) {
+    let str = e.target.value
+    let t = Object.values(env.index).find(t => t.hash.includes(str))
+    if(!t) return 0
+    select_node(t.hash)
 }
 
 // DOM helpers
@@ -564,8 +565,8 @@ function fetch_url(url) {
 
 function select_node(id) {
     let t = env.index?.[id], dom = el(id)    // global env
-    if (!t || !dom) return 0
-        ;[...document.querySelectorAll('.select')].map(n => n.classList.remove('select'))
+    if(!t || !dom) return 0
+    ;[...document.querySelectorAll('.select')].forEach(n => n.classList.remove('select'))
     dom.classList.add('select')
     let html = ''
     html += `Twist<pre>${JSON.stringify(t,              strsmasher, 1)}</pre>`
@@ -614,7 +615,7 @@ function hash_munge(str) {                   // beautiful nonsense
 }
 
 function highlight_node(id) {
-    ;[...document.querySelectorAll('.highlight')].map(n => n.classList.remove('highlight'))
+    ;[...document.querySelectorAll('.highlight')].forEach(n => n.classList.remove('highlight'))
     el(id)?.classList?.add('highlight')
     let html  = `<p>Focus: ${hash_munge('"'+env.focus.hash+'"')}</p>`
         html += `<p>Highlight: "${id}"</p>`  // focus is here so it refreshes w/ emojihex
@@ -737,8 +738,8 @@ function download_svg() {
 }
 
 function rainbowsparkles() {
-    ;[...document.querySelectorAll('path')].map(p=>p.classList.toggle('rainbowsparkles'))
-    ;[...document.querySelectorAll('circle')].map(p=>p.classList.toggle('nodesparkles'))
+    ;[...document.querySelectorAll('path')].forEach(p=>p.classList.toggle('rainbowsparkles'))
+    ;[...document.querySelectorAll('circle')].forEach(p=>p.classList.toggle('nodesparkles'))
 }
 
 function emojex() {
