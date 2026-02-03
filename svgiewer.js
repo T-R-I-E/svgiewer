@@ -139,7 +139,7 @@ function untwist_bodies(env) {
         b.teth = env.index[t] || 0           // objectify teth
         if(t && !b.teth) b.tethhash = t      // display missing teths
         b.shld = pluck_hash(env.buff, (i += leng(t)))
-        b.shwn = +env.atoms.some(x => x?.hash === b.shld)
+        // b.shwn = +env.atoms.some(x => x?.hash === b.shld)
         b.reqs = pluck_hash(env.buff, (i += leng(b.shld)))
         b.rigs = pluck_hash(env.buff, (i += leng(b.reqs)))
         b.carg = pluck_hash(env.buff, (i += leng(b.rigs)))
@@ -592,7 +592,7 @@ function show_abject_info(id) {
                    , displayValue: DQ.quantityToDisplay(abject.quantity, abject.displayPrecision)
                    , mintingInfo: abject.mintingInfo } //, root: env.abject.rootContext()}
         let newtime = performance.now()
-        el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2) + ` in ${(newtime-time).toFixed(1)}ms`
+        el('abject').innerHTML = `<details><summary>Abject info, generated in ${(newtime-time).toFixed(1)}ms </summary>` + JSON.stringify(env.info, 0, 2) + '</details>'
 
         abject.checkAllRigs().then(_ => {
             el('rigcheck').innerHTML = `Rigs checked successfully in ${(performance.now()-newtime).toFixed(1)}ms!`
