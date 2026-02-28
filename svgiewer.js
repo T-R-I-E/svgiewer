@@ -142,7 +142,7 @@ function untwist_bodies(env) {
         b.teth = env.index[t] || 0           // objectify teth
         if(t && !b.teth) b.tethhash = t      // display missing teths
         b.shld = pluck_hash(env.buff, (i += leng(t)))
-        b.shwn = +env.atoms.some(x => x?.hash === b.shld)
+        // b.shwn = +env.atoms.some(x => x?.hash === b.shld)
         b.reqs = pluck_hash(env.buff, (i += leng(b.shld)))
         b.rigs = pluck_hash(env.buff, (i += leng(b.reqs)))
         b.carg = pluck_hash(env.buff, (i += leng(b.rigs)))
@@ -655,64 +655,94 @@ function show_abject_info(id) {
                    , displayValue: DQ.quantityToDisplay(abject.quantity, abject.displayPrecision)
                    , mintingInfo: abject.mintingInfo } //, root: env.abject.rootContext()}
         let newtime = performance.now()
-        el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2) + ` in ${(newtime-time).toFixed(1)}ms`
+        // el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2) + ` in ${(newtime-time).toFixed(1)}ms`
+        	el('abject').innerHTML = `<details><summary>Abject info, generated in ${(newtime-time).toFixed(1)}ms </summary>` + JSON.stringify(env.info, 0, 2) + '</details>'
 
         abject.checkAllRigs().then(_ => {
             el('rigcheck').innerHTML = `Rigs checked successfully in ${(performance.now()-newtime).toFixed(1)}ms!`
         }).catch(_ => {
-            // XXX(sfertman): BEGIN ~~ TODA INSTANT REALAY CERTIFIED HACK ~~
-            class TwinInterpreter extends Interpreter { // copied from toda-verify/toda
-                getAllTethers() {
-                    let tethers = [];
-                    let prevTwist = this.line.twist(this.line.latestTwist());
-                    let abj;
+
+            // //XXX(sfertman): BEGIN ~~ TODA INSTANT REALAY CERTIFIED HACK ~~
+
+            // --- Optimized TwinInterpreter (pre-computed topline set) ---
+            class TwinInterpreter extends Interpreter {
+                _getAllTethers() {
+                    if(this._tethers) return this._tethers
+
+                    let tethers = []
+                    let prevTwist = this.line.twist(this.line.latestTwist())
+                    let abj
                     try {
-                        abj = Abject.fromTwist(prevTwist);
-                    } catch (e) { }
-
-                    while (prevTwist) {
-                        if (prevTwist.getTetherHash()) {
-                            tethers.push(prevTwist.getTetherHash());
+                        abj = Abject.fromTwist(prevTwist)
+                    } catch(_e) {}
+                    while(prevTwist) {
+                        if(prevTwist.getTetherHash()) {
+                            tethers.push(prevTwist.getTetherHash())
                         }
-                        prevTwist = prevTwist.prev();
+                        prevTwist = prevTwist.prev()
                     }
-
-                    if (abj && abj instanceof DelegableActionable) {
-                        for (let delegate of abj.delegationChain()) {
-                            prevTwist = new Twist(abj.atoms, delegate.twistHash);
-                            while (prevTwist) {
-                                if (prevTwist.getTetherHash()) {
-                                    tethers.push(prevTwist.getTetherHash());
+                    if(abj && abj instanceof DelegableActionable) {
+                        for(let delegate of abj.delegationChain()) {
+                            prevTwist = new Twist(abj.atoms, delegate.twistHash)
+                            while(prevTwist) {
+                                if(prevTwist.getTetherHash()) {
+                                    tethers.push(prevTwist.getTetherHash())
                                 }
-                                prevTwist = prevTwist.prev();
+                                prevTwist = prevTwist.prev()
                             }
                         }
                     }
-                    return tethers;
+
+                    this._tethers = tethers
+                    return tethers
                 }
-                
-                isTopline(hash) {
-                    if (this.line.colinear(hash, this.topHash)) {
-                        return true;
-                    }
-                    for (let tether of this.getAllTethers()) {
-                        if (this.line.colinear(hash, tether)) {
-                            return true;
+
+                _buildToplineSet() {
+                    if(this._toplineSet) return this._toplineSet
+
+                    const s = new Set()
+
+                    const collectChain = (startHash) => {
+                        // Walk backwards
+                        let h = startHash
+                        while(h && !s.has(h.toString())) {
+                            s.add(h.toString())
+                            h = this.line.prev(h)
+                        }
+                        // Walk forwards
+                        h = this.line.successor(startHash)
+                        while(h && !s.has(h.toString())) {
+                            s.add(h.toString())
+                            h = this.line.successor(h)
                         }
                     }
-                    return false;
+
+                    // Topline
+                    collectChain(this.topHash)
+
+                    // All tether chains
+                    for(const tether of this._getAllTethers()) {
+                        collectChain(tether)
+                    }
+
+                    this._toplineSet = s
+                    return s
+                }
+
+                isTopline(hash) {
+                    return this._buildToplineSet().has(hash.toString())
                 }
             }
             
             DelegableActionable.prototype._constructInterpreter = function () {
-                return new TwinInterpreter(new Twist(this.atoms, this.twistHash), this.popTop());
+                return new TwinInterpreter(new Twist(this.atoms, this.twistHash), this.poptop());
             };
               
-            const ti = new TwinInterpreter(Line.fromTwist(twist), abject.popTop());
+            const ti = new TwinInterpreter(Line.fromTwist(twist), abject.poptop());
             return ti.verifyTopline()
                 .then(_ => ti.verifyHitchLine(twist.getHash()))
                 .then(_ => el('rigcheck').innerHTML = `Integrity certified by TodaQ instant relay in ${(performance.now()-newtime).toFixed(1)}ms!`)
-            //XXX(sfertman): END ~~ TODA INSTANT REALAY CERTIFIED HACK ~~
+            // //XXX(sfertman): END ~~ TODA INSTANT REALAY CERTIFIED HACK ~~
         }).catch(e => {
             el('rigcheck').innerHTML = `Rig check failed, consuming ${(performance.now()-newtime).toFixed(1)}ms of precious battery life`
             console.error(e)
