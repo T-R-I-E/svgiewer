@@ -371,7 +371,7 @@ function render_svg(env) {
         let f = seg.first, l = seg.last
         if(!f.cx || !l.cx) return
         edgestr += `<path d="M ${f.cx} ${f.cy} ${l.cx} ${l.cy}" class="prev"/>`
-        let mx = (f.cx + l.cx) / 2, my = f.cy
+        let mx = (f.cx + l.cx) / 2, my = f.cy  // cy is constant along a line
         svgs += `<circle cx="${mx}" cy="${my}" r="8" fill="#${f.colour}" id="${seg.id}" opacity="0.6" style="pointer-events:auto;cursor:pointer"/>`
         svgs += `<text x="${mx}" y="${my + 3}" text-anchor="middle" font-size="7" fill="#000" style="pointer-events:none">${seg.twists.length}</text>`
     })
@@ -570,11 +570,13 @@ let _selected = null, _highlighted = null  // O(1) class toggle tracking
 
 function toggle_collapse() {                  // collapse/expand all segments
     let anyCollapsed = env.segments?.some(s => s.collapsed)
+    let sel = _selected?.id
     env.segments?.forEach(s => { if(s.twists.length >= MIN_COLLAPSE) s.collapsed = !anyCollapsed })
     _selected = null; _highlighted = null
     render_svg(env)
     let focus = env.focus?.hash
     if(focus) el(focus)?.classList.add('focus')
+    if(sel) select_node(sel)                 // restore selection (auto-expands if needed)
     scroll_to(env.vp.x, env.vp.y)
 }
 
@@ -723,8 +725,8 @@ function rainbowsparkles() {
 
 function emojex() {
     env.emhx ^= 1
-    select_node(document.getElementsByClassName('select')[0]?.id)
-    highlight_node(document.getElementsByClassName('highlight')[0]?.id)
+    select_node(_selected?.id)
+    highlight_node(_highlighted?.id)
 }
 
 function get_me_all_the_emoji() {            // over-the-top emoji fetching courtesy of bogomoji
