@@ -315,7 +315,7 @@ function render_svg(env) {
         else
             edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" class="${e[2]} ${dashed}"/>`
     })
-    vp.innerHTML = '<g id="gtag">' + edgestr + svgs + '</g>'
+    vp.innerHTML = '<g id="gtag" style="will-change:transform">' + edgestr + svgs + '</g>'
     return env
 }
 
@@ -461,7 +461,7 @@ vp.addEventListener('mousemove', e => {
 
 window.addEventListener('keydown', e => {
     if(typeof env === 'undefined') return true
-    let key = e.keyCode, id = document.getElementsByClassName('select')[0]?.id
+    let key = e.keyCode, id = _selected?.id
     let t = env.index?.[id]                  // global env
     if (!id || !t) return 0
     if (key === 38)                          // up up
@@ -500,10 +500,13 @@ function fetch_url(url) {
            .catch(err => console.error(err)) // stop trying to make fetch happen
 }
 
+let _selected = null, _highlighted = null  // O(1) class toggle tracking
+
 function select_node(id) {
     let t = env.index?.[id], dom = el(id)    // global env
     if(!t || !dom) return 0
-    ;[...document.querySelectorAll('.select')].forEach(n => n.classList.remove('select'))
+    _selected?.classList.remove('select')
+    _selected = dom
     dom.classList.add('select')
     let html = ''
     html += `Twist<pre>${JSON.stringify(t,              strsmasher, 1)}</pre>`
@@ -552,8 +555,9 @@ function hash_munge(str) {                   // beautiful nonsense
 }
 
 function highlight_node(id) {
-    ;[...document.querySelectorAll('.highlight')].forEach(n => n.classList.remove('highlight'))
-    el(id)?.classList?.add('highlight')
+    _highlighted?.classList.remove('highlight')
+    _highlighted = el(id)
+    _highlighted?.classList?.add('highlight')
     let html  = `<p>Focus: ${hash_munge('"'+env.focus.hash+'"')}</p>`
         html += `<p>Highlight: "${id}"</p>`  // focus is here so it refreshes w/ emojihex
     el('highlight').innerHTML = hash_munge(html).replace(/onmouseover=".*?"/, '') // does not play well with onclick
