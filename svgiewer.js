@@ -263,7 +263,14 @@ function plonk_twists(env) {
         lines = lines.map(t => {
             if(gas-- <= 0 || t.outies.every(t=>t[0].x)) {
                 t.x = x += mind
-                t = t.succ[0]
+                let seg = t.segment
+                if(seg?.collapsed && t === seg.first && seg.twists.length > 2) {
+                    for(let i = 1; i < seg.twists.length - 1; i++)
+                        seg.twists[i].x = t.x    // park intermediates at first's x
+                    t = seg.last              // jump to last, placed next iteration
+                } else {
+                    t = t.succ[0]
+                }
             }
             return t
         }).filter(t => t)
@@ -568,11 +575,19 @@ function fetch_url(url) {
 
 let _selected = null, _highlighted = null  // O(1) class toggle tracking
 
+function relayout(env) {                     // re-run layout after collapse/expand
+    env.shapes[TWIST]?.forEach(t => t.x = 0)
+    plonk_twists(env)
+    decorate_twists(env)
+    set_limits(env)
+}
+
 function toggle_collapse() {                  // collapse/expand all segments
     let anyCollapsed = env.segments?.some(s => s.collapsed)
     let sel = _selected?.id
     env.segments?.forEach(s => { if(s.twists.length >= MIN_COLLAPSE) s.collapsed = !anyCollapsed })
     _selected = null; _highlighted = null
+    relayout(env)
     render_svg(env)
     let focus = env.focus?.hash
     if(focus) el(focus)?.classList.add('focus')
@@ -584,6 +599,7 @@ function expand_segment(seg) {               // open a collapsed segment
     seg.collapsed = false
     let vx = env.vp.x, vy = env.vp.y        // preserve viewport
     _selected = null; _highlighted = null    // refs will be stale after re-render
+    relayout(env)
     render_svg(env)
     let focus = env.focus?.hash
     if(focus) el(focus)?.classList.add('focus')
