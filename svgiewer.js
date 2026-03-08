@@ -53,6 +53,7 @@ let showpipe = pipe( buff_to_env
                    , y_the_first_twist
                    , stack_lines
                    , stack_lines             // second time's the charm
+                   , build_segments
                    , plonk_twists
                    , decorate_twists
                    , end_timer
@@ -265,7 +266,14 @@ function plonk_twists(env) {
         lines = lines.map(t => {
             if(gas-- <= 0 || t.outies.every(t=>t[0].x)) {
                 t.x = x += mind
-                t = t.succ[0]
+                let seg = t.segment
+                if(seg?.collapsed && t === seg.first && seg.twists.length > 2) {
+                    for(let i = 1; i < seg.twists.length - 1; i++)
+                        seg.twists[i].x = t.x    // park intermediates at first's x
+                    t = seg.last              // jump to last, placed next iteration
+                } else {
+                    t = t.succ[0]
+                }
             }
             return t
         }).filter(t => t)
@@ -279,6 +287,50 @@ function decorate_twists(env) {
         t.cy = 400 - t.first.y * 30
         t.colour = t.first.hash.slice(2, 8)
     })
+    return env
+}
+
+const MIN_COLLAPSE = 3                       // segments smaller than this stay expanded
+
+function build_segments(env) {               // collapse boring twist runs
+    let edgeTargets = new Set()              // twists pointed to by non-prev edges
+    env.shapes[TWIST]?.forEach(t => {
+        t.outies.forEach(([target, type]) => {
+            if(type !== 'prev') edgeTargets.add(target)
+        })
+    })
+
+    env.segments = []
+    env.segIndex = {}                        // seg id -> segment
+
+    function isInteresting(t) {
+        return edgeTargets.has(t) || t.outies.some(([_, type]) => type !== 'prev')
+    }
+
+    env.firsts.forEach(first => {
+        let t = first, seg = []
+        while(t) {
+            if(isInteresting(t)) {
+                if(seg.length) pushSeg(seg)
+                pushSeg([t])                 // interesting twists are always standalone
+                seg = []
+            } else {
+                seg.push(t)
+            }
+            t = t.succ[0]
+        }
+        if(seg.length) pushSeg(seg)
+    })
+
+    function pushSeg(twists) {
+        let s = { twists, collapsed: twists.length >= MIN_COLLAPSE,
+                  first: twists[0], last: twists[twists.length - 1],
+                  id: 'seg_' + twists[0].hash.slice(0, 16) }
+        twists.forEach(t => t.segment = s)
+        env.segments.push(s)
+        env.segIndex[s.id] = s
+    }
+
     return env
 }
 
@@ -303,11 +355,16 @@ function render_svg(env) {
     let order = ['prev', 'teth', 'lead', 'meet', 'post', 'cargo']
     env.shapes[TWIST]?.forEach(t => {
         if(!t.cx) return 0                   // ignore equivocal successors
+        let seg = t.segment
+        if(seg?.collapsed && t !== seg.first && t !== seg.last)
+            return 0                         // skip collapsed internals
         svgs += `<circle cx="${t.cx}" cy="${t.cy}" r="5" fill="#${t.colour}" id="${t.hash}" />`
         edges = edges.concat(t.outies.map(o => [t, o[0], o[1]]))
     })
     edges.sort((a,b) => order.indexOf(a[2]) - order.indexOf(b[2]))
          .forEach(e => {                     // prev and teth at back for style
+        let s1 = e[0].segment, s2 = e[1].segment
+        if(s1?.collapsed && s1 === s2) return 0  // skip edges inside collapsed segments
         let fx = e[0].cx, fy = e[0].cy, tx = e[1].cx, ty = e[1].cy
         if(!(fx && fy && tx && ty)) return 0 // also eq successor
         let dashed = e[0].cx < e[1].cx ? 'dashed' : ''
@@ -379,6 +436,18 @@ function render_svg(env) {
         </g>
     `
     position_legend()
+
+    env.segments?.forEach(seg => {           // collapsed segment summaries
+        if(!seg.collapsed) return
+        let f = seg.first, l = seg.last
+        if(!f.cx || !l.cx) return
+        edgestr += `<path d="M ${f.cx} ${f.cy} ${l.cx} ${l.cy}" class="prev"/>`
+        let mx = (f.cx + l.cx) / 2, my = f.cy  // cy is constant along a line
+        svgs += `<circle cx="${mx}" cy="${my}" r="8" fill="#${f.colour}" id="${seg.id}" opacity="0.6" style="pointer-events:auto;cursor:pointer"/>`
+        svgs += `<text x="${mx}" y="${my + 3}" text-anchor="middle" font-size="7" fill="#000" style="pointer-events:none">${seg.twists.length}</text>`
+    })
+
+    vp.innerHTML = '<g id="gtag" style="will-change:transform">' + edgestr + svgs + '</g>'
     return env
 }
 
@@ -386,7 +455,9 @@ function select_focus(env) {
     if(!env.shapes[TWIST])
         el('stats').innerHTML = 'There are no twists in this file!'
     env.focus = env.shapes[TWIST][env.shapes[TWIST].length-1]
-    el(env.focus.hash).classList.add('focus')
+    let seg = env.focus.segment
+    if(seg?.collapsed) seg.collapsed = false  // ensure focus twist is visible
+    el(env.focus.hash)?.classList.add('focus')
     select_node(env.focus.hash)
     highlight_node(env.focus.hash)
     return env
@@ -403,7 +474,8 @@ function write_stats(env) {
         and <a href="" onclick="showhide('errors');return false">${env.errors.length.toLocaleString()} errors</a>. </p>
      <p><a href="" onclick="emojex();return false">emoji/hex</a>
         <a href="" onclick="rainbowsparkles();return false">rainbow/sparkles</a>
-        <a href="" onclick="download_svg();return false">download svg</a> </p>
+        <a href="" onclick="download_svg();return false">download svg</a>
+        <a href="" onclick="toggle_collapse();return false">collapse/expand</a> </p>
      <div id="errors" class="hidden"><p>${hash_munge(env.errors.map(e=>e.message).join('</p><p>'))}</p></div>`
     return env
 }
@@ -510,6 +582,8 @@ vp.addEventListener('mousedown', e => panning = true)
 vp.addEventListener('mouseup', e => panning = false)
 vp.addEventListener('click', e => {
     if(e.target.tagName === 'circle') {
+        let seg = env.segIndex?.[e.target.id]
+        if(seg) return expand_segment(seg)   // click on collapsed segment bubble
         select_node(e.target.id)
     }
 })
@@ -524,7 +598,7 @@ vp.addEventListener('mousemove', e => {
 
 window.addEventListener('keydown', e => {
     if(typeof env === 'undefined') return true
-    let key = e.keyCode, id = document.getElementsByClassName('select')[0]?.id
+    let key = e.keyCode, id = _selected?.id
     let t = env.index?.[id]                  // global env
     if (!id || !t) return 0
     if (key === 38)                          // up up
@@ -563,10 +637,50 @@ function fetch_url(url) {
            .catch(err => console.error(err)) // stop trying to make fetch happen
 }
 
+let _selected = null, _highlighted = null  // O(1) class toggle tracking
+
+function relayout(env) {                     // re-run layout after collapse/expand
+    env.shapes[TWIST]?.forEach(t => t.x = 0)
+    plonk_twists(env)
+    decorate_twists(env)
+    set_limits(env)
+}
+
+function toggle_collapse() {                  // collapse/expand all segments
+    let anyCollapsed = env.segments?.some(s => s.collapsed)
+    let sel = _selected?.id
+    env.segments?.forEach(s => { if(s.twists.length >= MIN_COLLAPSE) s.collapsed = !anyCollapsed })
+    _selected = null; _highlighted = null
+    relayout(env)
+    render_svg(env)
+    let focus = env.focus?.hash
+    if(focus) el(focus)?.classList.add('focus')
+    if(sel) select_node(sel)                 // restore selection (auto-expands if needed)
+    scroll_to(env.vp.x, env.vp.y)
+}
+
+function expand_segment(seg) {               // open a collapsed segment
+    seg.collapsed = false
+    let vx = env.vp.x, vy = env.vp.y        // preserve viewport
+    _selected = null; _highlighted = null    // refs will be stale after re-render
+    relayout(env)
+    render_svg(env)
+    let focus = env.focus?.hash
+    if(focus) el(focus)?.classList.add('focus')
+    scroll_to(vx, vy)
+    select_node(seg.first.hash)
+}
+
 function select_node(id) {
-    let t = env.index?.[id], dom = el(id)    // global env
-    if(!t || !dom) return 0
-    ;[...document.querySelectorAll('.select')].forEach(n => n.classList.remove('select'))
+    let t = env.index?.[id]                  // global env
+    if(!t) return 0
+    let seg = t.segment
+    if(seg?.collapsed && t !== seg.first && t !== seg.last)
+        return expand_segment(seg)           // auto-expand on nav into collapsed region
+    let dom = el(id)
+    if(!dom) return 0
+    _selected?.classList.remove('select')
+    _selected = dom
     dom.classList.add('select')
     let html = ''
     html += `Twist<pre>${JSON.stringify(t,              strsmasher, 1)}</pre>`
@@ -615,8 +729,9 @@ function hash_munge(str) {                   // beautiful nonsense
 }
 
 function highlight_node(id) {
-    ;[...document.querySelectorAll('.highlight')].forEach(n => n.classList.remove('highlight'))
-    el(id)?.classList?.add('highlight')
+    _highlighted?.classList.remove('highlight')
+    _highlighted = el(id)
+    _highlighted?.classList?.add('highlight')
     let html  = `<p>Focus: ${hash_munge('"'+env.focus.hash+'"')}</p>`
         html += `<p>Highlight: "${id}"</p>`  // focus is here so it refreshes w/ emojihex
     el('highlight').innerHTML = hash_munge(html).replace(/onmouseover=".*?"/, '') // does not play well with onclick
@@ -630,10 +745,16 @@ function scroll_to(x, y) {
     set_transform(tx, ty, env.vp.s)
 }
 
+let _raf = 0, _tx = 0, _ty = 0, _ts = 1
 function set_transform(x, y, s) {
-    let g = el('gtag')
-    if(!g) return
-    g.setAttribute('transform', `translate(${x},${y}) scale(${s})`)
+    _tx = x; _ty = y; _ts = s
+    if(_raf) return
+    _raf = requestAnimationFrame(() => {
+        _raf = 0
+        let g = el('gtag')
+        if(!g) return
+        g.style.transform = `translate(${_tx}px,${_ty}px) scale(${_ts})`
+    })
 }
 
 function showhide(id) {
@@ -656,7 +777,7 @@ function show_abject_info(id) {
                    , mintingInfo: abject.mintingInfo } //, root: env.abject.rootContext()}
         let newtime = performance.now()
         // el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2) + ` in ${(newtime-time).toFixed(1)}ms`
-        	el('abject').innerHTML = `<details><summary>Abject info, generated in ${(newtime-time).toFixed(1)}ms </summary>` + JSON.stringify(env.info, 0, 2) + '</details>'
+        el('abject').innerHTML = `<details><summary>Abject info, generated in ${(newtime-time).toFixed(1)}ms </summary>` + JSON.stringify(env.info, 0, 2) + '</details>'
 
         abject.checkAllRigs().then(_ => {
             el('rigcheck').innerHTML = `Rigs checked successfully in ${(performance.now()-newtime).toFixed(1)}ms!`
@@ -774,8 +895,8 @@ function rainbowsparkles() {
 
 function emojex() {
     env.emhx ^= 1
-    select_node(document.getElementsByClassName('select')[0]?.id)
-    highlight_node(document.getElementsByClassName('highlight')[0]?.id)
+    select_node(_selected?.id)
+    highlight_node(_highlighted?.id)
 }
 
 function get_me_all_the_emoji() {            // over-the-top emoji fetching courtesy of bogomoji
@@ -815,6 +936,8 @@ window.select_node = select_node
 window.showhide = showhide
 window.emojex = emojex
 window.slurp = slurp
+window.toggle_collapse = toggle_collapse
+window.expand_segment = expand_segment
 
 
 // init
