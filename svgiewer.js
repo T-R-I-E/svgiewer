@@ -681,10 +681,16 @@ function scroll_to(x, y) {
     set_transform(tx, ty, env.vp.s)
 }
 
+let _raf = 0, _tx = 0, _ty = 0, _ts = 1
 function set_transform(x, y, s) {
-    let g = el('gtag')
-    if(!g) return
-    g.setAttribute('transform', `translate(${x},${y}) scale(${s})`)
+    _tx = x; _ty = y; _ts = s
+    if(_raf) return
+    _raf = requestAnimationFrame(() => {
+        _raf = 0
+        let g = el('gtag')
+        if(!g) return
+        g.style.transform = `translate(${_tx}px,${_ty}px) scale(${_ts})`
+    })
 }
 
 function showhide(id) {
