@@ -50,9 +50,9 @@ let showpipe = pipe( buff_to_env
                    , y_the_first_twist
                    , stack_lines
                    , stack_lines             // second time's the charm
+                   , build_segments
                    , plonk_twists
                    , decorate_twists
-                   , build_segments
                    , end_timer
                    , set_limits
                    , render_svg
