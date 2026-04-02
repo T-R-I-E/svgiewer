@@ -515,7 +515,7 @@ vp.addEventListener('wheel', e => {
 
 let panning=false
 vp.addEventListener('mousedown', e => panning = true)
-vp.addEventListener('mouseup', e => panning = false)
+window.addEventListener('mouseup', e => panning = false)
 vp.addEventListener('click', e => {
     if(e.target.tagName === 'circle') {
         let seg = env.segIndex?.[e.target.id]
@@ -523,7 +523,7 @@ vp.addEventListener('click', e => {
         select_node(e.target.id)
     }
 })
-vp.addEventListener('mousemove', e => {
+window.addEventListener('mousemove', e => {
     if (e.target.tagName === 'circle') {
         highlight_node(e.target.id)
     }
