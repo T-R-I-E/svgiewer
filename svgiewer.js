@@ -1151,6 +1151,21 @@ window.toggle_card = toggle_card
 el('closeAside')?.addEventListener('click', () => el('app').dataset.aside = 'closed')
 el('openAside')?.addEventListener('click', () => el('app').dataset.aside = 'open')
 
+// theme toggle — mirror data-theme onto <html> so the dark tokens
+// cascade to body background too (custom props inherit downward, but
+// .app overrides never reach the html/body bg).
+function set_theme(t) {
+    el('app').dataset.theme = t
+    document.documentElement.dataset.theme = t
+}
+if(matchMedia('(prefers-color-scheme: dark)').matches && el('app').dataset.theme === 'light')
+    set_theme('dark')
+else
+    set_theme(el('app').dataset.theme || 'light')
+el('themeBtn')?.addEventListener('click', () => {
+    set_theme(el('app').dataset.theme === 'dark' ? 'light' : 'dark')
+})
+
 
 // init
 let url = window.location.hash.slice(1)

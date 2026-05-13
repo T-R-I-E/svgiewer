@@ -4,16 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>T.R.I.E. · File Visualizer</title>
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 
-<div class="app" id="app" data-search="" data-aside="open">
+<div class="app" id="app" data-search="" data-aside="open" data-theme="light">
 
     <header class="masthead">
         <div class="brand">
             <svg width="44" height="26" viewBox="-2 -2 154 92" aria-hidden="true">
-                <path d="M 0 0 L 100 0 L 50 86.6 Z" fill="rgba(0,0,0,0.08)"></path>
+                <path class="tri-shadow" d="M 0 0 L 100 0 L 50 86.6 Z"></path>
                 <path d="M 100 0 L 50 86.6 L 150 86.6 Z" fill="none" stroke="currentColor" stroke-width="2"></path>
                 <path d="M 100 0 L 88.2 86.6" fill="none" stroke="currentColor" stroke-width="2"></path>
             </svg>
@@ -21,6 +21,10 @@
             <div class="meta">File Visualizer<br><span class="ver">v1.42.1</span></div>
         </div>
         <div class="instructions">↑↓ traverse hitches · ←→ traverse the line · click selects · hover highlights · scroll zooms · drag pans · click any hash to follow it</div>
+        <button class="theme-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle dark mode">
+            <span class="glyph" aria-hidden="true"></span>
+            <span class="lbl"></span>
+        </button>
     </header>
 
     <section class="stats">
@@ -120,6 +124,6 @@
 
 </div>
 
-<script async src="svgiewer.js?v=6" type="module"></script>
+<script async src="svgiewer.js?v=7" type="module"></script>
 </body>
 </html>

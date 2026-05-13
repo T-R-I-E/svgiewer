@@ -10,6 +10,20 @@
     --rule: 2px solid var(--ink);
     --rule-1: 1px solid var(--ink);
     --rule-3: 3px solid var(--ink);
+
+    /* semantic surfaces / overlays — keyed so dark mode can flip them */
+    --hit-bg:        rgba(232,156,24,.22);
+    --hit-bg-focus:  rgba(232,156,24,.34);
+    --hit-strip-bg:  rgba(232,156,24,.18);
+    --hit-pre:       rgba(232,156,24,.55);
+    --hit-hash:      rgba(232,156,24,.33);
+    --tw-bg:         rgba(214,23,90,.13);
+    --par-bg:        rgba(232,156,24,.22);
+    --rig-bg:        rgba(63,168,91,.12);
+    --rule-soft:     rgba(0,0,0,.25);
+    --dotted:        rgba(0,0,0,.15);
+    --shadow-tri:    rgba(0,0,0,.08);
+
     --display: "GT Sectra", "Tiempos Headline", "Source Serif Pro", Georgia, serif;
     --sans: "Söhne", "Inter Tight", "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
     --mono: "Berkeley Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
@@ -22,8 +36,9 @@
     --rail: 32px;
     --aside: 540px;
 
-    /* graph edge/node stroke colours */
-    --stroke-default: #15110b;
+    /* graph edge/node stroke colours — bright on both themes, only default
+       follows --ink so the circle stroke contrasts the paper */
+    --stroke-default: var(--ink);
     --stroke-prev: #999;
     --stroke-teth: #f9f;
     --stroke-lead: rgb(61, 255, 51);
@@ -34,9 +49,38 @@
     --stroke-highlight: yellow;
     --stroke-select: rgb(0, 255, 60);
 }
+
+/* Dark mode — overrides keyed on <html data-theme="dark"> so the tokens
+   cascade everywhere (body included). Accents are brightened so they
+   keep punch on ink. */
+:root[data-theme="dark"] {
+    --ink: #f0ece2;
+    --paper: #11130f;
+    --paper-2: #1a1d18;
+    --magenta: #FF4F8E;
+    --amber:   #FFB347;
+    --teal:    #5CC2FF;
+    --lime:    #6CE38A;
+
+    --hit-bg:        rgba(255,179,71,.18);
+    --hit-bg-focus:  rgba(255,179,71,.28);
+    --hit-strip-bg:  rgba(255,179,71,.10);
+    --hit-pre:       rgba(255,179,71,.40);
+    --hit-hash:      rgba(255,179,71,.22);
+    --tw-bg:         rgba(255,79,142,.10);
+    --par-bg:        rgba(255,179,71,.14);
+    --rig-bg:        rgba(108,227,138,.10);
+    --rule-soft:     rgba(255,255,255,.22);
+    --dotted:        rgba(255,255,255,.14);
+    --shadow-tri:    rgba(255,255,255,.08);
+}
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; height: 100%; background: var(--paper); color: var(--ink); font-family: var(--sans); overflow: hidden; }
 button { font: inherit; color: inherit; }
+
+/* brand triangle subtle face — needs a CSS selector because SVG fill
+   attribute doesn't read CSS vars */
+.brand svg .tri-shadow { fill: var(--shadow-tri); }
 
 /* ─────────── reusable bits ─────────── */
 .eyebrow { font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; opacity: .6; }
@@ -77,7 +121,7 @@ button { font: inherit; color: inherit; }
 }
 .brand .meta {
     font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase; opacity: .6;
-    border-left: 1px solid rgba(0,0,0,.25); padding-left: 12px; line-height: 1.35;
+    border-left: 1px solid var(--rule-soft); padding-left: 12px; line-height: 1.35;
 }
 .brand .meta .ver { opacity: .85; font-family: var(--mono); letter-spacing: .5px; text-transform: none; }
 .instructions {
@@ -103,10 +147,10 @@ button { font: inherit; color: inherit; }
 .stat.big .value { font-size: 34px; }
 .stat .sub { font-family: var(--mono); font-size: 10px; opacity: .55; }
 .stat .sub a { color: inherit; text-decoration: underline; }
-.stat.tw  { background: rgba(214,23,90,.13); }
-.stat.par { background: rgba(232,156,24,.22); }
+.stat.tw  { background: var(--tw-bg); }
+.stat.par { background: var(--par-bg); }
 .stat.par .value { color: var(--teal); }
-.stat.rig { background: rgba(63,168,91,.12); }
+.stat.rig { background: var(--rig-bg); }
 .stat.rig .value { display: inline-flex; align-items: baseline; gap: 10px; font-family: var(--mono); font-size: 14px; font-weight: 500; }
 .stat.src {
     background: var(--ink); color: var(--paper);
@@ -123,9 +167,9 @@ button { font: inherit; color: inherit; }
 .tool .lbl { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; opacity: .6; }
 .field { border: var(--rule); padding: 2px 10px; background: var(--paper); font-family: var(--mono); font-size: 12px; color: inherit; }
 .field.dash { border-style: dashed; opacity: .8; max-width: 200px; }
-.field.search { flex: 1; background: rgba(232,156,24,.22); min-width: 0; }
+.field.search { flex: 1; background: var(--hit-bg); min-width: 0; }
 input.field { outline: none; }
-input.field:focus { background: rgba(232,156,24,.34); }
+input.field:focus { background: var(--hit-bg-focus); }
 .hits-count { font-family: var(--mono); font-size: 11px; background: var(--ink); color: var(--paper); padding: 2px 8px; white-space: nowrap; }
 .toggles { padding: 0 18px; display: flex; gap: 12px; align-items: center; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
 .toggles span { cursor: pointer; }
@@ -134,7 +178,7 @@ input.field:focus { background: rgba(232,156,24,.34); }
 /* ─────────── search hits strip ─────────── */
 .hits {
     display: flex; align-items: center; border-bottom: var(--rule);
-    background: rgba(232,156,24,.18); padding: 8px 22px; gap: 10px;
+    background: var(--hit-strip-bg); padding: 8px 22px; gap: 10px;
     height: var(--h-hits); overflow: hidden;
     transition: height .18s ease, padding-top .18s ease, padding-bottom .18s ease, opacity .18s ease;
 }
@@ -150,7 +194,7 @@ input.field:focus { background: rgba(232,156,24,.34); }
 }
 .hit:hover { background: var(--paper-2); }
 .hit.current { box-shadow: 2px 2px 0 var(--ink); }
-.hit .pre { background: rgba(232,156,24,.55); padding: 0 2px; font-weight: 700; }
+.hit .pre { background: var(--hit-pre); padding: 0 2px; font-weight: 700; }
 .hit .tail { opacity: .45; }
 
 /* ─────────── body ─────────── */
@@ -226,7 +270,7 @@ input.field:focus { background: rgba(232,156,24,.34); }
 .aside #highlight .focus-row {
     display: grid; grid-template-columns: 90px 1fr; gap: 14px;
     padding: 6px 0; align-items: baseline;
-    border-bottom: 1px dotted rgba(0,0,0,.15);
+    border-bottom: 1px dotted var(--dotted);
 }
 .aside #highlight .focus-row:last-child { border-bottom: 0; }
 .aside #highlight .focus-row .eyebrow {
@@ -236,7 +280,7 @@ input.field:focus { background: rgba(232,156,24,.34); }
     font-family: var(--mono); font-size: 12px; word-break: break-all;
 }
 .aside #highlight .hash-line.hl {
-    background: rgba(232,156,24,.33); padding: 1px 6px; justify-self: start;
+    background: var(--hit-hash); padding: 1px 6px; justify-self: start;
 }
 .aside #highlight .hash-line a { color: inherit; text-decoration: none; border-bottom: 1px solid currentColor; }
 .aside #highlight .hash-line a:hover { color: var(--magenta); }
@@ -252,7 +296,7 @@ input.field:focus { background: rgba(232,156,24,.34); }
 .card.errors .err-row {
     display: grid; grid-template-columns: 26px 1fr; gap: 12px;
     padding: 8px 0; align-items: baseline;
-    border-bottom: 1px dotted rgba(0,0,0,.15);
+    border-bottom: 1px dotted var(--dotted);
 }
 .card.errors .err-row:last-child { border-bottom: 0; }
 .card.errors .err-marker {
@@ -292,7 +336,7 @@ input.field:focus { background: rgba(232,156,24,.34); }
 }
 .kv {
     display: grid; grid-template-columns: 90px 1fr; gap: 14px;
-    padding: 6px 0; border-bottom: 1px dotted rgba(0,0,0,.15);
+    padding: 6px 0; border-bottom: 1px dotted var(--dotted);
     font-family: var(--mono); font-size: 12px;
 }
 .kv:last-child { border-bottom: 0; }
@@ -311,7 +355,7 @@ input.field:focus { background: rgba(232,156,24,.34); }
 
 /* ─────────── graph node/edge styling (SVG content rendered by JS) ─────────── */
 #viewport [id^="seg_"] {
-    stroke: #333;
+    stroke: var(--stroke-prev);
     stroke-width: 2;
     stroke-dasharray: 4 2;
 }
@@ -426,3 +470,36 @@ input.field:focus { background: rgba(232,156,24,.34); }
 .legend-collapsed .legend-content { display: none; }
 .legend-collapsed .legend-hamburger { display: block; }
 #svg-color-legend:not(.legend-collapsed) .legend-hamburger { display: none; }
+
+/* ─────────── theme toggle (masthead, right edge) ─────────── */
+.theme-btn {
+    align-self: stretch;
+    border-left: var(--rule); border-top: 0; border-right: 0; border-bottom: 0;
+    background: var(--paper); color: var(--ink); cursor: pointer;
+    padding: 0 18px; font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase;
+    display: flex; align-items: center; gap: 10px;
+}
+.theme-btn:hover { background: var(--paper-2); }
+.theme-btn .glyph {
+    width: 14px; height: 14px; display: inline-block; position: relative;
+}
+/* In dark mode the glyph is a sun — clicking switches to light */
+:root[data-theme="dark"] .theme-btn .glyph::before {
+    content: ""; position: absolute; inset: 3px; border-radius: 50%;
+    background: var(--amber); box-shadow:
+        0 -7px 0 -3px var(--amber), 0 7px 0 -3px var(--amber),
+        7px 0 0 -3px var(--amber), -7px 0 0 -3px var(--amber),
+        5px 5px 0 -3px var(--amber), -5px -5px 0 -3px var(--amber),
+        5px -5px 0 -3px var(--amber), -5px 5px 0 -3px var(--amber);
+}
+/* In light mode the glyph is a moon — clicking switches to dark */
+:root:not([data-theme="dark"]) .theme-btn .glyph::before {
+    content: ""; position: absolute; inset: 1px; border-radius: 50%;
+    background: var(--ink);
+}
+:root:not([data-theme="dark"]) .theme-btn .glyph::after {
+    content: ""; position: absolute; top: 0; left: 4px; width: 10px; height: 12px;
+    border-radius: 50%; background: var(--paper);
+}
+.theme-btn .lbl::before { content: "Dark"; }
+:root[data-theme="dark"] .theme-btn .lbl::before { content: "Light"; }
