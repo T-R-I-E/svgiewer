@@ -45,6 +45,8 @@ let _palette = null                          // resolved CSS-var colours
 let _rainbow = false                         // rainbow toggle (canvas hue-rotate)
 let _rainbow_raf = 0
 let _mode = 'svg'                            // 'svg' or 'canvas' rendering mode
+const SIZE_LOCK_TWISTS = 2000                // files with more twists than this are forced to canvas+no-rainbow
+let _size_locked = false
 
 let showpipe = pipe( buff_to_env
                    , start_timer
@@ -66,6 +68,7 @@ let showpipe = pipe( buff_to_env
                    , end_timer
                    , set_limits
                    , env => (read_palette(), build_paths(), build_spatial_index(),
+                             enforce_size_limits(),
                              _mode === 'svg' ? render_svg(env) : null, env)
                    , select_focus
                    , write_stats
@@ -1090,7 +1093,6 @@ function render_twist_card(t) {
         + kv_row('prev',   hash_link(t.prev?.hash || t.body?.prevhash), 'teal')
         + kv_row('teth',   hash_link(t.teth?.hash || t.body?.tethhash), 'amber')
         + kv_row('first',  hash_link(t.first?.hash), 'lime')
-        + kv_row('segment', t.segment?.id ? short(t.segment.id) : '—')
     return card_open('twist', 'Twist') + body + card_close
 }
 
@@ -1320,6 +1322,7 @@ function render_svg(env) {
     svgEl.innerHTML = `<g id="gtag" style="will-change:transform">${edgestr}${svgs}</g>`
     set_svg_transform()
     sync_svg_classes()
+    if(_rainbow) apply_rainbow_state()       // rainbow classes are wiped by innerHTML; reapply
 }
 
 // Mirror the atom-ref selection/highlight/focus state onto SVG circles
@@ -1341,18 +1344,41 @@ function sync_svg_classes() {
 
 function set_mode(m) {
     if(m !== 'svg' && m !== 'canvas') return
+    if(_size_locked && m === 'svg') return   // forced to canvas for huge files
     _mode = m
     el('app').dataset.mode = m
-    if(m === 'svg') {
-        render_svg(env)
-    } else {
-        request_render()
-    }
+    if(m === 'svg') render_svg(env)
+    else            request_render()
+    apply_rainbow_state()                    // reapply rainbow effect to new mode
     sync_toggles()
 }
 
 function toggle_mode() {
+    if(_size_locked) return
     set_mode(_mode === 'svg' ? 'canvas' : 'svg')
+}
+
+// After each load (or any layout change) check the size and lock down
+// the renderer if the file is too large to handle in SVG / with rainbow
+// effects. Re-evaluates each call so toggle_collapse etc. can clear the
+// lock if collapsing pushes us back under the threshold.
+function enforce_size_limits() {
+    let twistCount = env.shapes?.[TWIST]?.length || 0
+    let lock = twistCount > SIZE_LOCK_TWISTS
+    _size_locked = lock
+    if(lock) {
+        if(_mode === 'svg') {
+            _mode = 'canvas'
+            el('app').dataset.mode = 'canvas'
+        }
+        if(_rainbow) {                       // turn off rainbow
+            _rainbow = false
+            apply_rainbow_state()
+        }
+    }
+    let toggles = document.querySelectorAll('.toggles span')
+    toggles[1]?.classList.toggle('locked', lock)  // svg/canvas
+    toggles[2]?.classList.toggle('locked', lock)  // rainbow
 }
 
 function showhide(id) {
@@ -1546,16 +1572,32 @@ function build_export_svg() {
 }
 
 function rainbowsparkles() {
+    if(_size_locked) return                  // locked for huge files
     _rainbow = !_rainbow
+    apply_rainbow_state()
+    sync_toggles()
+}
+
+// Apply the current _rainbow flag to whichever renderer is active.
+// SVG: toggle the .rainbowsparkles / .nodesparkles classes on existing
+//   path/circle elements (they animate via the CSS keyframes).
+// Canvas: drive a rAF loop that re-renders with a hue-rotate filter.
+function apply_rainbow_state() {
+    if(_mode === 'svg') {
+        let on = _rainbow
+        for(let p of svgEl.querySelectorAll('path'))   p.classList.toggle('rainbowsparkles', on)
+        for(let c of svgEl.querySelectorAll('circle')) c.classList.toggle('nodesparkles', on)
+        return
+    }
+    // canvas mode
     if(_rainbow && !_rainbow_raf) {
         let tick = () => {
-            if(!_rainbow) { _rainbow_raf = 0; return }
+            if(!_rainbow || _mode !== 'canvas') { _rainbow_raf = 0; return }
             request_render()
             _rainbow_raf = requestAnimationFrame(tick)
         }
         _rainbow_raf = requestAnimationFrame(tick)
     }
-    sync_toggles()
     request_render()
 }
 
