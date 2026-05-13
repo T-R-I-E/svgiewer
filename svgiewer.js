@@ -66,7 +66,7 @@ let showpipe = pipe( buff_to_env
                    , stack_lines
                    , stack_lines             // second time's the charm
                    , build_segments
-                   , plonk_twists
+                   , plonk_with_fallback
                    , decorate_twists
                    , end_timer
                    , set_limits
@@ -295,6 +295,45 @@ function plonk_twists(env) {
             }
             return t
         }).filter(t => t)
+    }
+    env.layoutGasOut = gas < 0               // burned through the budget — placements are unreliable
+    return env
+}
+
+// Fast fallback layout: walk each line front-to-back and place every twist
+// at the next sequential x. No dependency resolution so cross-line meet/lead
+// edges go diagonally instead of converging. Used when plonk_twists runs
+// out of gas; gives a coherent monotone layout instead of the jumble that
+// over-budgeted plonk produces.
+function fast_plonk(env) {
+    let x = 0, mind = 20
+    env.shapes[TWIST]?.forEach(t => t.x = 0)
+    for(let first of env.firsts) {
+        let t = first
+        while(t) {
+            x += mind
+            t.x = x
+            let seg = t.segment
+            if(seg?.collapsed && t === seg.first && seg.twists.length > 2) {
+                for(let i = 1; i < seg.twists.length - 1; i++)
+                    seg.twists[i].x = t.x
+                t = seg.last
+            } else {
+                t = t.succ[0]
+            }
+        }
+    }
+    return env
+}
+
+function plonk_with_fallback(env) {
+    plonk_twists(env)
+    if(env.layoutGasOut) {
+        fast_plonk(env)
+        env.layoutFallback = true
+        console.warn(`plonk_twists ran out of gas (${env.shapes[TWIST]?.length} twists); using fast_plonk fallback`)
+    } else {
+        env.layoutFallback = false
     }
     return env
 }
@@ -725,12 +764,14 @@ function write_stats(env) {
     return env
 }
 
-// Refresh the parse-cell errors link and the errors card content.
-// Called both from write_stats (post-load) and after a rig check failure
-// adds to env.errors mid-session.
+// Refresh the rig-cell errors link and the errors card content. Called
+// both from write_stats (post-load) and after a rig check failure adds
+// to env.errors mid-session. Lives in the rig cell because every error
+// we surface currently comes either from atom parsing or rig verification
+// — both verification-flavoured, not "Parse took N ms" facts.
 function update_errors_view() {
     let errCount = env.errors?.length || 0
-    el('stat-parse-sub').innerHTML = errCount
+    el('stat-rig-sub').innerHTML = errCount
         ? `<a href="" onclick="open_errors();return false">${errCount.toLocaleString()} errors</a>`
         : ''
     el('errors').innerHTML = errCount ? render_errors_card(env.errors) : ''
@@ -996,7 +1037,7 @@ let _selected = null, _highlighted = null   // current selected/highlighted atom
 
 function relayout(env) {                     // re-run layout after collapse/expand
     env.shapes[TWIST]?.forEach(t => t.x = 0)
-    plonk_twists(env)
+    plonk_with_fallback(env)
     decorate_twists(env)
     set_limits(env)
 }
@@ -1688,6 +1729,13 @@ window.toggle_mode = toggle_mode
 // aside open/close
 el('closeAside')?.addEventListener('click', () => el('app').dataset.aside = 'closed')
 el('openAside')?.addEventListener('click', () => el('app').dataset.aside = 'open')
+
+// The .body grid-template-columns transition resizes .canvas when the
+// aside opens or closes; redraw at the new size once the transition
+// completes so the canvas bitmap and the SVG transform recover.
+document.querySelector('.body')?.addEventListener('transitionend', e => {
+    if(e.propertyName === 'grid-template-columns') apply_view()
+})
 
 // theme toggle — mirror data-theme onto <html> so the dark tokens
 // cascade to body background too (custom props inherit downward, but
