@@ -36,9 +36,13 @@ const ARB   = 0x60
 const PAIRTRIE = 0x63
 const HASHLIST = 0x61
 const el = document.getElementById.bind(document)
-const vp = el('viewport')                    // svg canvas
+const vp = el('viewport')                    // <canvas> graph viewport
+const ctx = vp.getContext('2d')
 let env = {}
 let lastSource = {kind: 'url', name: 'dq.toda'}
+let _palette = null                          // resolved CSS-var colours
+let _rainbow = false                         // rainbow toggle (canvas hue-rotate)
+let _rainbow_raf = 0
 
 let showpipe = pipe( buff_to_env
                    , start_timer
@@ -59,7 +63,7 @@ let showpipe = pipe( buff_to_env
                    , decorate_twists
                    , end_timer
                    , set_limits
-                   , render_svg
+                   , env => (read_palette(), build_paths(), build_spatial_index(), env)
                    , select_focus
                    , write_stats
                    , env => (sync_toggles(), env)
@@ -352,114 +356,316 @@ function set_limits(env) {
     return env
 }
 
-function render_svg(env) {
-    let svgs = '', edgestr = '', edges = []
-    let order = ['prev', 'teth', 'lead', 'meet', 'post', 'cargo']
-    env.shapes[TWIST]?.forEach(t => {
-        if(!t.cx) return 0                   // ignore equivocal successors
-        let seg = t.segment
-        if(seg?.collapsed && t !== seg.first && t !== seg.last)
-            return 0                         // skip collapsed internals
-        svgs += `<circle cx="${t.cx}" cy="${t.cy}" r="5" fill="#${t.colour}" id="${t.hash}" />`
-        edges = edges.concat(t.outies.map(o => [t, o[0], o[1]]))
-    })
-    edges.sort((a,b) => order.indexOf(a[2]) - order.indexOf(b[2]))
-         .forEach(e => {                     // prev and teth at back for style
-        let s1 = e[0].segment, s2 = e[1].segment
-        if(s1?.collapsed && s1 === s2) return 0  // skip edges inside collapsed segments
-        let fx = e[0].cx, fy = e[0].cy, tx = e[1].cx, ty = e[1].cy
-        if(!(fx && fy && tx && ty)) return 0 // also eq successor
-        let dashed = e[0].cx < e[1].cx ? 'dashed' : ''
-        if(e[2] === 'teth')
-            edgestr += `<path d="M ${fx} ${fy} Q ${(fx+tx+tx)/3} ${(ty+fy)/2} ${tx} ${ty}" class="${e[2]} ${dashed}"/>`
-        else if(e[2] === 'lead' || e[2] === 'meet')
-            edgestr += `<path d="M ${fx} ${fy} Q ${(fx+fx+tx)/3} ${(ty+fy)/2} ${tx} ${ty}" class="${e[2]} ${dashed}"/>`
-        else
-            edgestr += `<path d="M ${fx} ${fy} ${tx} ${ty}" class="${e[2]} ${dashed}"/>`
-    })
-    
-    // Create two separate layers - graph content and legend
-    vp.innerHTML = `
-        <g id="gtag">${edgestr}${svgs}</g>
-        <g id="svg-color-legend" class="legend-collapsed">
-            <!-- Hamburger icon for collapsed state -->
-            <g id="legend-hamburger" class="legend-hamburger" onclick="toggleLegend()">
-                <rect x="0" y="0" width="40" height="40" rx="5" ry="5" class="legend-background"></rect>
-                <line x1="10" y1="12" x2="30" y2="12" stroke="var(--stroke-default)" stroke-width="3"></line>
-                <line x1="10" y1="20" x2="30" y2="20" stroke="var(--stroke-default)" stroke-width="3"></line>
-                <line x1="10" y1="28" x2="30" y2="28" stroke="var(--stroke-default)" stroke-width="3"></line>
-            </g>
-            
-            <!-- Expanded legend content - add onclick to collapse it -->
-            <g id="legend-content" class="legend-content" onclick="toggleLegend()">
-                <rect id="legend-bg" x="0" y="0" width="120" height="230" rx="5" ry="5" class="legend-background"></rect>
-                <text x="10" y="20" class="legend-title">Stroke Colours</text>
-                
-                <!-- Default -->
-                <line x1="10" y1="35" x2="30" y2="35" stroke="var(--stroke-default)" stroke-width="2"></line>
-                <text x="40" y="40" class="legend-text">Default</text>
-                
-                <!-- Previous -->
-                <line x1="10" y1="55" x2="30" y2="55" stroke="var(--stroke-prev)" stroke-width="2"></line>
-                <text x="40" y="60" class="legend-text">Previous</text>
-                
-                <!-- Teth -->
-                <line x1="10" y1="75" x2="30" y2="75" stroke="var(--stroke-teth)" stroke-width="2"></line>
-                <text x="40" y="80" class="legend-text">Teth</text>
-                
-                <!-- Lead -->
-                <line x1="10" y1="95" x2="30" y2="95" stroke="var(--stroke-lead)" stroke-width="2"></line>
-                <text x="40" y="100" class="legend-text">Lead</text>
-                
-                <!-- Meet -->
-                <line x1="10" y1="115" x2="30" y2="115" stroke="var(--stroke-meet)" stroke-width="2"></line>
-                <text x="40" y="120" class="legend-text">Meet</text>
-                
-                <!-- Post -->
-                <line x1="10" y1="135" x2="30" y2="135" stroke="var(--stroke-post)" stroke-width="2"></line>
-                <text x="40" y="140" class="legend-text">Post</text>
-                
-                <!-- Cargo -->
-                <line x1="10" y1="155" x2="30" y2="155" stroke="var(--stroke-cargo)" stroke-width="2"></line>
-                <text x="40" y="160" class="legend-text">Cargo</text>
-                
-                <!-- Focus -->
-                <line x1="10" y1="175" x2="30" y2="175" stroke="var(--stroke-focus)" stroke-width="2"></line>
-                <text x="40" y="180" class="legend-text">Focus</text>
-                
-                <!-- Highlight -->
-                <line x1="10" y1="195" x2="30" y2="195" stroke="var(--stroke-highlight)" stroke-width="2"></line>
-                <text x="40" y="200" class="legend-text">Highlight</text>
-                
-                <!-- Select -->
-                <line x1="10" y1="215" x2="30" y2="215" stroke="var(--stroke-select)" stroke-width="2"></line>
-                <text x="40" y="220" class="legend-text">Select</text>
-            </g>
-        </g>
-    `
-    position_legend()
+// ─── canvas rendering ───
+const EDGE_ORDER = ['prev', 'teth', 'lead', 'meet', 'post', 'cargo']
+const TAU = Math.PI * 2
+let _paths = null            // cached Path2D objects, rebuilt on layout change
 
-    env.segments?.forEach(seg => {           // collapsed segment summaries
-        if(!seg.collapsed) return
+function read_palette() {
+    let cs = getComputedStyle(document.documentElement)
+    let g = name => cs.getPropertyValue(name).trim()
+    _palette = {
+        ink:           g('--ink')             || '#15110b',
+        paper:         g('--paper')           || '#f3efe6',
+        defStroke:     g('--stroke-default')  || '#15110b',
+        prev:          g('--stroke-prev')     || '#999',
+        teth:          g('--stroke-teth')     || '#f9f',
+        lead:          g('--stroke-lead')     || 'rgb(61,255,51)',
+        meet:          g('--stroke-meet')     || '#86f',
+        post:          g('--stroke-post')     || 'rgb(255,174,60)',
+        cargo:         g('--stroke-cargo')    || 'rgb(255,0,0)',
+        focus:         g('--stroke-focus')    || '#ff17c9',
+        highlight:     g('--stroke-highlight')|| 'yellow',
+        select:        g('--stroke-select')   || 'rgb(0,255,60)',
+    }
+    return _palette
+}
+
+function ensure_canvas_size() {
+    let dpr = window.devicePixelRatio || 1
+    let cw = vp.clientWidth, ch = vp.clientHeight
+    let w = Math.max(1, Math.floor(cw * dpr))
+    let h = Math.max(1, Math.floor(ch * dpr))
+    if(vp.width !== w || vp.height !== h) { vp.width = w; vp.height = h }
+}
+
+let _raf = 0
+function request_render() {
+    if(_raf) return
+    _raf = requestAnimationFrame(() => { _raf = 0; render_canvas(env) })
+}
+
+// Build cached Path2D objects from the current layout. The graph topology
+// changes only when data loads or segments collapse/expand, so we pay the
+// per-edge geometry cost once per layout instead of every frame. Each
+// frame then just strokes/fills the cached paths.
+function build_paths() {
+    let paths = {
+        edges: {},                   // {type: [solidPath2D, dashedPath2D]}
+        segConn: new Path2D(),       // straight connector line per collapsed segment
+        nodesByColor: new Map(),     // {color: Path2D of all that color's circles}
+        segMarkers: [],              // {x, y, color, count} list for bubble + text
+    }
+    for(let type of EDGE_ORDER) paths.edges[type] = [new Path2D(), new Path2D()]
+
+    let twists = env.shapes?.[TWIST] || []
+    for(let i = 0; i < twists.length; i++) {
+        let from = twists[i]
+        if(!from.cx) continue
+        let segA = from.segment
+        if(segA?.collapsed && from !== segA.first && from !== segA.last) continue
+        let outies = from.outies
+        for(let j = 0; j < outies.length; j++) {
+            let to = outies[j][0], type = outies[j][1]
+            if(segA?.collapsed && segA === to.segment) continue
+            let fx = from.cx, fy = from.cy, tx = to.cx, ty = to.cy
+            if(!(fx && fy && tx && ty)) continue
+            let pair = paths.edges[type]
+            if(!pair) continue
+            let p = pair[fx < tx ? 1 : 0]
+            p.moveTo(fx, fy)
+            if(type === 'teth') p.quadraticCurveTo((fx+tx+tx)/3, (ty+fy)/2, tx, ty)
+            else if(type === 'lead' || type === 'meet') p.quadraticCurveTo((fx+fx+tx)/3, (ty+fy)/2, tx, ty)
+            else p.lineTo(tx, ty)
+        }
+    }
+
+    for(let seg of env.segments || []) {
+        if(!seg.collapsed) continue
         let f = seg.first, l = seg.last
-        if(!f.cx || !l.cx) return
-        edgestr += `<path d="M ${f.cx} ${f.cy} ${l.cx} ${l.cy}" class="prev"/>`
-        let mx = (f.cx + l.cx) / 2, my = f.cy  // cy is constant along a line
-        svgs += `<circle cx="${mx}" cy="${my}" r="8" fill="#${f.colour}" id="${seg.id}" opacity="0.6" style="pointer-events:auto;cursor:pointer"/>`
-        svgs += `<text x="${mx}" y="${my + 3}" text-anchor="middle" font-size="7" fill="#000" style="pointer-events:none">${seg.twists.length}</text>`
-    })
+        if(!f.cx || !l.cx) continue
+        paths.segConn.moveTo(f.cx, f.cy)
+        paths.segConn.lineTo(l.cx, l.cy)
+        let mx = (f.cx + l.cx)/2, my = f.cy
+        paths.segMarkers.push({ x: mx, y: my, color: '#' + f.colour, count: seg.twists.length })
+    }
 
-    vp.innerHTML = '<g id="gtag" style="will-change:transform">' + edgestr + svgs + '</g>'
-    return env
+    for(let i = 0; i < twists.length; i++) {
+        let t = twists[i]
+        if(!t.cx) continue
+        let seg = t.segment
+        if(seg?.collapsed && t !== seg.first && t !== seg.last) continue
+        let c = '#' + t.colour
+        let p = paths.nodesByColor.get(c)
+        if(!p) { p = new Path2D(); paths.nodesByColor.set(c, p) }
+        p.moveTo(t.cx + 5, t.cy)
+        p.arc(t.cx, t.cy, 5, 0, TAU)
+    }
+
+    _paths = paths
+}
+
+function render_canvas(env) {
+    if(!env || !env.shapes) return
+    if(!_paths) build_paths()
+    ensure_canvas_size()
+    let pal = _palette || read_palette()
+    let dpr = window.devicePixelRatio || 1
+    let cw = vp.clientWidth, ch = vp.clientHeight
+    let s = env.vp.s
+
+    // Reset transform, clear, then apply world transform composed with dpr.
+    // Set lineWidth/lineCap defaults at default-screen space so the strokes
+    // come out at consistent visual thickness; we'll use ctx.lineWidth in
+    // world space via setTransform inverse — but for the simple approach
+    // here, set lineWidth small and accept it scales with zoom.
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect(0, 0, vp.width, vp.height)
+    ctx.filter = _rainbow
+        ? `hue-rotate(${(performance.now()/30) % 360}deg) saturate(1.4) brightness(1.15)`
+        : 'none'
+    ctx.setTransform(s*dpr, 0, 0, s*dpr,
+                     (-s*env.vp.x + cw/2) * dpr,
+                     (-s*env.vp.y + ch/2) * dpr)
+
+    // Line widths are in world units after the world transform — divide by
+    // scale to keep visual thickness constant regardless of zoom.
+    let invS = 1 / s
+    ctx.lineCap = 'butt'
+
+    // Level-of-detail: at deep zoom-out, individual edges and circle outlines
+    // are sub-pixel anyway. Skip cached paths and draw nodes as tiny rects
+    // (fillRect is ~10x faster than path-tracing arcs and doesn't blow up
+    // with content size).
+    let LOD_SIMPLE = s < 0.15
+
+    if(LOD_SIMPLE) {
+        // Draw nodes as 2-world-unit squares so they're at least a pixel at
+        // s=0.5 and fade as we zoom further. Skip strokes and edges entirely.
+        let twists = env.shapes?.[TWIST] || []
+        let rectSize = Math.max(2 * invS, 1.5 * invS)
+        let half = rectSize / 2
+        // Group nodes by color so we batch fillStyle changes
+        let byColor = new Map()
+        for(let i = 0; i < twists.length; i++) {
+            let t = twists[i]
+            if(!t.cx) continue
+            let seg = t.segment
+            if(seg?.collapsed && t !== seg.first && t !== seg.last) continue
+            let c = '#' + t.colour
+            let arr = byColor.get(c)
+            if(!arr) { arr = []; byColor.set(c, arr) }
+            arr.push(t.cx, t.cy)
+        }
+        for(let [colour, arr] of byColor) {
+            ctx.fillStyle = colour
+            for(let i = 0; i < arr.length; i += 2) {
+                ctx.fillRect(arr[i] - half, arr[i+1] - half, rectSize, rectSize)
+            }
+        }
+    } else {
+        // 1) Stroke cached edge paths in order. prev/teth behind hitch edges.
+        for(let type of EDGE_ORDER) {
+            let pair = _paths.edges[type]
+            ctx.strokeStyle = pal[type]
+            ctx.lineWidth = invS
+            ctx.setLineDash([])
+            ctx.stroke(pair[0])
+            ctx.setLineDash([3 * invS])
+            ctx.stroke(pair[1])
+        }
+        ctx.setLineDash([])
+
+        // 2) Connector line between first/last of each collapsed segment
+        ctx.strokeStyle = pal.prev
+        ctx.lineWidth = invS
+        ctx.stroke(_paths.segConn)
+
+        // 3) Fill+stroke node circles, one batched path per colour
+        ctx.lineWidth = invS
+        ctx.strokeStyle = pal.defStroke
+        for(let [colour, p] of _paths.nodesByColor) {
+            ctx.fillStyle = colour
+            ctx.fill(p)
+            ctx.stroke(p)
+        }
+    }
+
+    // 4) Segment markers (semitransparent bubble + count text)
+    if(!LOD_SIMPLE && _paths.segMarkers.length) {
+        ctx.setLineDash([4*invS, 2*invS])
+        ctx.lineWidth = 2*invS
+        ctx.strokeStyle = pal.prev
+        ctx.font = (7*invS) + 'px sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        for(let m of _paths.segMarkers) {
+            ctx.beginPath()
+            ctx.moveTo(m.x + 8, m.y)
+            ctx.arc(m.x, m.y, 8, 0, TAU)
+            ctx.fillStyle = m.color
+            ctx.globalAlpha = 0.6
+            ctx.fill()
+            ctx.globalAlpha = 1
+            ctx.stroke()
+            ctx.fillStyle = pal.ink
+            ctx.fillText(String(m.count), m.x, m.y + invS)
+        }
+        ctx.setLineDash([])
+        ctx.lineWidth = invS
+    }
+
+    // 5) Selection / highlight / focus overlays (drawn last, max three rings)
+    if(_selected && _selected.cx !== undefined) {
+        ctx.beginPath()
+        ctx.arc(_selected.cx, _selected.cy, 8, 0, TAU)
+        ctx.fillStyle = '#' + _selected.colour
+        ctx.globalAlpha = 0.5
+        ctx.fill()
+        ctx.globalAlpha = 1
+        ctx.strokeStyle = pal.select
+        ctx.lineWidth = 3*invS
+        ctx.stroke()
+    }
+    if(_highlighted && _highlighted.cx !== undefined) {
+        ctx.beginPath()
+        ctx.arc(_highlighted.cx, _highlighted.cy, 8, 0, TAU)
+        ctx.strokeStyle = pal.highlight
+        ctx.lineWidth = 4*invS
+        ctx.globalAlpha = 0.5
+        ctx.stroke()
+        ctx.globalAlpha = 1
+    }
+    if(env.focus && env.focus.cx !== undefined) {
+        ctx.beginPath()
+        ctx.arc(env.focus.cx, env.focus.cy, 9, 0, TAU)
+        ctx.strokeStyle = pal.focus
+        ctx.lineWidth = 4*invS
+        ctx.stroke()
+    }
+
+    ctx.filter = 'none'
+}
+
+// ─── spatial index for O(1) hit-testing ───
+const SPATIAL_CELL = 40
+let _spatial = null
+
+function build_spatial_index() {
+    _spatial = new Map()
+    let push = (key, t) => {
+        let arr = _spatial.get(key)
+        if(!arr) { arr = []; _spatial.set(key, arr) }
+        arr.push(t)
+    }
+    let twists = env.shapes?.[TWIST] || []
+    for(let i = 0; i < twists.length; i++) {
+        let t = twists[i]
+        if(!t.cx) continue
+        let seg = t.segment
+        if(seg?.collapsed && t !== seg.first && t !== seg.last) continue
+        let kx = Math.floor(t.cx / SPATIAL_CELL), ky = Math.floor(t.cy / SPATIAL_CELL)
+        push(kx + ',' + ky, t)
+    }
+    // collapsed-segment markers are clickable too
+    for(let seg of env.segments || []) {
+        if(!seg.collapsed) continue
+        let f = seg.first, l = seg.last
+        if(!f.cx || !l.cx) continue
+        let mx = (f.cx + l.cx)/2, my = f.cy
+        let kx = Math.floor(mx / SPATIAL_CELL), ky = Math.floor(my / SPATIAL_CELL)
+        push(kx + ',' + ky, { __seg: seg, cx: mx, cy: my })
+    }
+}
+
+function hit_test(wx, wy, radius = 8) {
+    if(!_spatial) return null
+    let r2 = radius * radius
+    let best = null, bestD = r2
+    let kx = Math.floor(wx / SPATIAL_CELL), ky = Math.floor(wy / SPATIAL_CELL)
+    let span = Math.max(1, Math.ceil(radius / SPATIAL_CELL))
+    for(let dx = -span; dx <= span; dx++) {
+        for(let dy = -span; dy <= span; dy++) {
+            let arr = _spatial.get((kx+dx) + ',' + (ky+dy))
+            if(!arr) continue
+            for(let i = 0; i < arr.length; i++) {
+                let t = arr[i]
+                let ddx = t.cx - wx, ddy = t.cy - wy
+                let d2 = ddx*ddx + ddy*ddy
+                if(d2 < bestD) { bestD = d2; best = t }
+            }
+        }
+    }
+    return best
+}
+
+function event_to_world(e) {
+    let rect = vp.getBoundingClientRect()
+    let cx = e.clientX - rect.left, cy = e.clientY - rect.top
+    return {
+        x: (cx - vp.clientWidth/2) / env.vp.s + env.vp.x,
+        y: (cy - vp.clientHeight/2) / env.vp.s + env.vp.y,
+    }
 }
 
 function select_focus(env) {
-    if(!env.shapes[TWIST])
+    if(!env.shapes[TWIST]) {
         el('highlight').innerHTML = '<p>There are no twists in this file!</p>'
+        return env
+    }
     env.focus = env.shapes[TWIST][env.shapes[TWIST].length-1]
     let seg = env.focus.segment
     if(seg?.collapsed) seg.collapsed = false  // ensure focus twist is visible
-    el(env.focus.hash)?.classList.add('focus')
     select_node(env.focus.hash)
     highlight_node(env.focus.hash)
     return env
@@ -604,45 +810,53 @@ function pipe(...funs) {
 
 vp.addEventListener('wheel', e => {
     let ds = (201+Math.max(-200, Math.min(200, e.deltaY)))/200
-    let s = Math.max(0.02, Math.min(200, env.vp.s * ds))
-    env.vp.s = s                             // global env
-    scroll_to(env.vp.x, env.vp.y)
+    env.vp.s = Math.max(0.02, Math.min(200, env.vp.s * ds))
+    request_render()
     return e.preventDefault() || false
 })
 
-let panning=false
-vp.addEventListener('mousedown', e => panning = true)
-window.addEventListener('mouseup', e => panning = false)
+let panning = false
+vp.addEventListener('mousedown', e => { panning = true; vp.style.cursor = 'grabbing' })
+window.addEventListener('mouseup', e => { panning = false; vp.style.cursor = '' })
 vp.addEventListener('click', e => {
-    if(e.target.tagName === 'circle') {
-        let seg = env.segIndex?.[e.target.id]
-        if(seg) return expand_segment(seg)   // click on collapsed segment bubble
-        select_node(e.target.id)
-    }
+    if(!_spatial) return
+    let w = event_to_world(e)
+    let t = hit_test(w.x, w.y, 8)
+    if(!t) return
+    if(t.__seg) return expand_segment(t.__seg)
+    select_node(t.hash)
 })
 window.addEventListener('mousemove', e => {
-    if (e.target.tagName === 'circle') {
-        highlight_node(e.target.id)
-    }
     if(panning) {
-        scroll_to(env.vp.x - e.movementX / env.vp.s, env.vp.y - e.movementY / env.vp.s)
+        env.vp.x -= e.movementX / env.vp.s
+        env.vp.y -= e.movementY / env.vp.s
+        request_render()
+        return
+    }
+    if(!_spatial || e.target !== vp) return
+    let w = event_to_world(e)
+    let t = hit_test(w.x, w.y, 8)
+    if(t && !t.__seg && t !== _highlighted) {
+        highlight_node(t.hash)
     }
 })
 
 window.addEventListener('keydown', e => {
-    if(typeof env === 'undefined') return true
-    let key = e.keyCode, id = _selected?.id
-    let t = env.index?.[id]                  // global env
-    if (!id || !t) return 0
+    let t = _selected
+    if(!t) return 0
+    let key = e.keyCode
     if (key === 38)                          // up up
         select_node(get(t, 'cargoup')?.hash || get(t, 'meetup')?.hash || get(t, 'leadup')?.hash || get(t, 'post')?.hash || t.teth?.hash)
     if (key === 40)                          // down down
         select_node(get(t, 'cargo')?.hash || get(t, 'lead')?.hash || get(t, 'meet')?.hash)
     if (key === 37)                          // left right
-        select_node(t.prev.hash)
+        select_node(t.prev?.hash)
     if (key === 39)                          // left right
         select_node(t.succ[0]?.hash)
 })
+
+// theme change + resize trigger redraws (palette tokens may have changed)
+window.addEventListener('resize', () => request_render())
 
 el('todafile').oninput = function (t) {
     let file = t.srcElement.files?.[0]
@@ -702,7 +916,7 @@ function fetch_url(url) {
            .catch(err => console.error(err)) // stop trying to make fetch happen
 }
 
-let _selected = null, _highlighted = null  // O(1) class toggle tracking
+let _selected = null, _highlighted = null   // current selected/highlighted atom refs
 
 function relayout(env) {                     // re-run layout after collapse/expand
     env.shapes[TWIST]?.forEach(t => t.x = 0)
@@ -713,13 +927,11 @@ function relayout(env) {                     // re-run layout after collapse/exp
 
 function toggle_collapse() {                  // collapse/expand all segments
     let anyCollapsed = env.segments?.some(s => s.collapsed)
-    let sel = _selected?.id
+    let sel = _selected?.hash
     env.segments?.forEach(s => { if(s.twists.length >= MIN_COLLAPSE) s.collapsed = !anyCollapsed })
     _selected = null; _highlighted = null
     relayout(env)
-    render_svg(env)
-    let focus = env.focus?.hash
-    if(focus) el(focus)?.classList.add('focus')
+    build_paths(); build_spatial_index()
     if(sel) select_node(sel)                 // restore selection (auto-expands if needed)
     scroll_to(env.vp.x, env.vp.y)
     sync_toggles()
@@ -728,11 +940,9 @@ function toggle_collapse() {                  // collapse/expand all segments
 function expand_segment(seg) {               // open a collapsed segment
     seg.collapsed = false
     let vx = env.vp.x, vy = env.vp.y        // preserve viewport
-    _selected = null; _highlighted = null    // refs will be stale after re-render
+    _selected = null; _highlighted = null
     relayout(env)
-    render_svg(env)
-    let focus = env.focus?.hash
-    if(focus) el(focus)?.classList.add('focus')
+    build_paths(); build_spatial_index()
     scroll_to(vx, vy)
     select_node(seg.first.hash)
 }
@@ -743,11 +953,8 @@ function select_node(id) {
     let seg = t.segment
     if(seg?.collapsed && t !== seg.first && t !== seg.last)
         return expand_segment(seg)           // auto-expand on nav into collapsed region
-    let dom = el(id)
-    if(!dom) return 0
-    _selected?.classList.remove('select')
-    _selected = dom
-    dom.classList.add('select')
+    if(t.cx === undefined) return 0
+    _selected = t
     let html = render_twist_card(t) + render_body_card(t.body) + render_cargo_card(t.body?.cargooo)
     el('select').innerHTML = html
     show_abject_info(id)
@@ -970,9 +1177,8 @@ function hash_munge(str) {                   // beautiful nonsense
 }
 
 function highlight_node(id) {
-    _highlighted?.classList.remove('highlight')
-    _highlighted = el(id)
-    _highlighted?.classList?.add('highlight')
+    let t = env.index?.[id]
+    _highlighted = t || null
     let f = env.focus?.hash
     let h = id || f
     let html = ''
@@ -981,26 +1187,12 @@ function highlight_node(id) {
     html += `<div class="focus-row"><span class="eyebrow">Highlight</span>`
           + `<span class="hash-line hl">${h ? hash_link(h) : '—'}</span></div>`
     el('highlight').innerHTML = html.replace(/onmouseover="[^"]*"/g, '')
+    request_render()
 }
 
 function scroll_to(x, y) {
-    env.vp.x = x                             // global env
-    env.vp.y = y
-    let tx = -x * env.vp.s + vp.clientWidth / 2
-    let ty = -y * env.vp.s + vp.clientHeight / 2
-    set_transform(tx, ty, env.vp.s)
-}
-
-let _raf = 0, _tx = 0, _ty = 0, _ts = 1
-function set_transform(x, y, s) {
-    _tx = x; _ty = y; _ts = s
-    if(_raf) return
-    _raf = requestAnimationFrame(() => {
-        _raf = 0
-        let g = el('gtag')
-        if(!g) return
-        g.style.transform = `translate(${_tx}px,${_ty}px) scale(${_ts})`
-    })
+    env.vp.x = x; env.vp.y = y
+    request_render()
 }
 
 function showhide(id) {
@@ -1138,29 +1330,79 @@ const SVG_EXPORT_STYLES = `
 `
 
 function download_svg() {
-    let head = `<svg title="graph" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="${env.limits.minx - 10} ${env.limits.miny - 10} ${env.limits.manx + 10} ${env.limits.many + 20}">`;
-    let style = "<style>" + SVG_EXPORT_STYLES + "</style>";
-    let svg_data = vp.innerHTML;
-    let full_svg = head + style + svg_data + "</svg>";
+    if(!env.focus) return
+    let w = env.limits.manx - env.limits.minx + 20
+    let h = env.limits.many - env.limits.miny + 30
+    let viewBox = `${env.limits.minx - 10} ${env.limits.miny - 10} ${w} ${h}`
+    let head = `<svg title="graph" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">`
+    let style = "<style>" + SVG_EXPORT_STYLES + "</style>"
+    let full_svg = head + style + build_export_svg() + "</svg>"
 
-    let blob = new Blob([full_svg], {type: "image/svg+xml"});
-    let link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = env.focus.hash + ".svg";
-    link.click();
-    URL.revokeObjectURL(link.href);
+    let blob = new Blob([full_svg], {type: "image/svg+xml"})
+    let link = document.createElement("a")
+    link.href = URL.createObjectURL(blob)
+    link.download = env.focus.hash + ".svg"
+    link.click()
+    URL.revokeObjectURL(link.href)
+}
+
+// Build an SVG string from the current env data (replaces the old
+// DOM-scraping export — canvas has no DOM to read).
+function build_export_svg() {
+    let svgs = '', edgestr = ''
+    let twists = env.shapes[TWIST] || []
+    let edges = []
+    for(let t of twists) {
+        if(!t.cx) continue
+        let seg = t.segment
+        if(seg?.collapsed && t !== seg.first && t !== seg.last) continue
+        svgs += `<circle cx="${t.cx}" cy="${t.cy}" r="5" fill="#${t.colour}" id="${t.hash}"/>`
+        for(let [target, type] of t.outies) edges.push([t, target, type])
+    }
+    edges.sort((a, b) => EDGE_ORDER.indexOf(a[2]) - EDGE_ORDER.indexOf(b[2]))
+    for(let [from, to, type] of edges) {
+        let segA = from.segment
+        if(segA?.collapsed && segA === to.segment) continue
+        let fx = from.cx, fy = from.cy, tx = to.cx, ty = to.cy
+        if(!(fx && fy && tx && ty)) continue
+        let dashed = fx < tx ? ' dashed' : ''
+        if(type === 'teth')
+            edgestr += `<path d="M ${fx} ${fy} Q ${(fx+tx+tx)/3} ${(ty+fy)/2} ${tx} ${ty}" class="${type}${dashed}"/>`
+        else if(type === 'lead' || type === 'meet')
+            edgestr += `<path d="M ${fx} ${fy} Q ${(fx+fx+tx)/3} ${(ty+fy)/2} ${tx} ${ty}" class="${type}${dashed}"/>`
+        else
+            edgestr += `<path d="M ${fx} ${fy} L ${tx} ${ty}" class="${type}${dashed}"/>`
+    }
+    for(let seg of env.segments || []) {
+        if(!seg.collapsed) continue
+        let f = seg.first, l = seg.last
+        if(!f.cx || !l.cx) continue
+        edgestr += `<path d="M ${f.cx} ${f.cy} L ${l.cx} ${l.cy}" class="prev"/>`
+        let mx = (f.cx + l.cx)/2, my = f.cy
+        svgs += `<circle cx="${mx}" cy="${my}" r="8" fill="#${f.colour}" id="${seg.id}" opacity="0.6"/>`
+        svgs += `<text x="${mx}" y="${my + 3}" text-anchor="middle" font-size="7" fill="#000">${seg.twists.length}</text>`
+    }
+    return edgestr + svgs
 }
 
 function rainbowsparkles() {
-    ;[...vp.querySelectorAll('path')].forEach(p=>p.classList.toggle('rainbowsparkles'))
-    ;[...vp.querySelectorAll('circle')].forEach(p=>p.classList.toggle('nodesparkles'))
+    _rainbow = !_rainbow
+    if(_rainbow && !_rainbow_raf) {
+        let tick = () => {
+            if(!_rainbow) { _rainbow_raf = 0; return }
+            request_render()
+            _rainbow_raf = requestAnimationFrame(tick)
+        }
+        _rainbow_raf = requestAnimationFrame(tick)
+    }
     sync_toggles()
+    request_render()
 }
 
 function emojex() {
     env.emhx ^= 1
-    select_node(_selected?.id)
-    highlight_node(_highlighted?.id)
+    if(_selected) select_node(_selected.hash)
+    if(_highlighted) highlight_node(_highlighted.hash)
     sync_toggles()
 }
 
@@ -1169,7 +1411,7 @@ function sync_toggles() {
     if(toggles.length < 2) return
     let [emo, rain] = toggles
     emo.classList.toggle('on', env.emhx === 0)   // .on when in emoji mode
-    rain.classList.toggle('on', !!vp.querySelector('.rainbowsparkles, .nodesparkles'))
+    rain.classList.toggle('on', _rainbow)
 }
 
 function get_me_all_the_emoji() {            // over-the-top emoji fetching courtesy of bogomoji
@@ -1223,6 +1465,8 @@ el('openAside')?.addEventListener('click', () => el('app').dataset.aside = 'open
 function set_theme(t) {
     el('app').dataset.theme = t
     document.documentElement.dataset.theme = t
+    read_palette()   // re-resolve --stroke-* / --ink etc. for canvas
+    request_render()
 }
 if(matchMedia('(prefers-color-scheme: dark)').matches && el('app').dataset.theme === 'light')
     set_theme('dark')
@@ -1292,44 +1536,3 @@ function slurp(url, hashes) {
     // - in the future, render iteratively...
 }
 
-function position_legend() {
-    const svg = document.getElementById('viewport')
-    let legend = document.getElementById('svg-color-legend')
-    let hamburger = document.getElementById('legend-hamburger')
-    
-    if (svg && legend) {
-        // Get SVG viewport dimensions
-        const viewportWidth = svg.clientWidth || svg.getBoundingClientRect().width
-        const viewportHeight = svg.clientHeight || svg.getBoundingClientRect().height
-        
-        // Set position based on state - different position for collapsed vs expanded
-        const padding = 10;
-        
-        if (legend.classList.contains('legend-collapsed')) {
-            // Position just the hamburger at bottom right
-            legend.setAttribute('transform', `translate(${viewportWidth - 45 - padding}, ${viewportHeight - 45 - padding})`)
-        } else {
-            // Position the full legend at bottom right
-            legend.setAttribute('transform', `translate(${viewportWidth - 120 - padding}, ${viewportHeight - 230 - padding})`)
-        }
-        
-        // Ensure legend stays on top by moving it to be the last child of the SVG
-        svg.appendChild(legend)
-    }
-}
-
-// Toggle legend expansion/collapse
-function toggleLegend() {
-    const legend = document.getElementById('svg-color-legend');
-    if (legend) {
-        legend.classList.toggle('legend-collapsed');
-        // Reposition based on new state
-        position_legend();
-    }
-}
-
-// Add window resize listener to reposition legend
-window.addEventListener('resize', position_legend)
-
-// Export the toggleLegend function to global scope
-window.toggleLegend = toggleLegend;
