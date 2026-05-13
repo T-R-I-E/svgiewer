@@ -350,6 +350,35 @@ input.field:focus { background: var(--hit-bg-focus); }
 .v.teal  { color: var(--teal); }
 .v.amber { color: var(--amber); }
 .v.lime  { color: var(--lime); }
+.v .alias   { color: var(--teal); font-weight: 600; }
+.v .literal { color: var(--amber); }
+.k .alias   { color: var(--teal); font-weight: 600; }
+.k .literal { color: var(--amber); }
+
+/* nested atom block inside a card (rigtrie, cargo sub-tries) */
+.card .sub-section {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--dotted);
+}
+.card .sub-section .sub-head {
+    font-size: 11px; opacity: .7; letter-spacing: 1px; text-transform: uppercase;
+    margin-bottom: 6px;
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+}
+.card .sub-section .sub-meta {
+    opacity: .65; font-family: var(--mono);
+    letter-spacing: 0; text-transform: none; font-size: 11px;
+}
+/* sub-section rows hold hash/hash or hash/alias pairs, so split evenly
+   instead of using the label/value column proportions */
+.card .sub-section .kv { grid-template-columns: 1fr 1fr; }
+
+/* preserve case + monospace for hashes inside meta-lines (otherwise they
+   pick up the uppercase text-transform meant for labels) */
+.card .meta-line .meta-hash {
+    text-transform: none; font-family: var(--mono); letter-spacing: 0;
+}
 
 .hidden { display: none; }
 

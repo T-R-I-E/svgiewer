@@ -823,32 +823,62 @@ function render_body_card(b) {
         + kv_row('shld', hash_link(b.shld), 'lime')
         + kv_row('rigs', hash_link(b.rigs), 'lime')
         + kv_row('carg', hash_link(b.carg))
+    if(b.rigtrie) body += render_atom_subsection('rigtrie', b.rigtrie)
     return card_open('body', 'Body') + body + card_close
 }
 
-function cargo_value_display(v) {
-    if(!v) return '—'
-    if(v.hash) return hash_link(v.hash)
-    if(v.shape === ARB) {
-        let raw = arb_to_twever(v)
-        return typeof raw === 'string' ? raw : String(raw)
+// Render the value side of a trie pair / list item, mirroring the original
+// strsmasher's resolution order: English alias by hash, then ARB literal
+// unwrap, then a short (linkable when it's a known twist) hash, then a
+// stringified fallback. `x` is an atom object, a raw hash string, or 0.
+function smash_pair_side(x) {
+    if(x === 0 || x === null || x === undefined) return '<span class="literal">0</span>'
+    let h = (typeof x === 'string') ? x : x.hash
+    if(h) {
+        let alias = reld(h)
+        if(alias) return `<span class="alias">${alias}</span>`
+        if(x?.shape === ARB) {
+            let raw = arb_to_twever(x)
+            return typeof raw === 'string'
+                ? `<span class="literal">"${raw}"</span>`
+                : `<span class="literal">${raw}</span>`
+        }
+        return hash_link(h)
     }
-    if(typeof v === 'string') return short(v)
-    return reld(v) || '?'
+    return `<span class="literal">${x}</span>`
+}
+
+// Render a nested atom (pair-trie or hash-list) as a labeled sub-section
+// inside an outer card. Used for body.rigtrie and any nested cargo tries.
+function render_atom_subsection(label, atom) {
+    if(!atom) return ''
+    let rows = ''
+    if(atom.pairs) {
+        atom.pairs.forEach(([k, v]) => rows += kv_row(smash_pair_side(k), smash_pair_side(v)))
+    } else if(atom.list) {
+        atom.list.forEach((item, i) => rows += kv_row(`[${i}]`, smash_pair_side(item)))
+    } else {
+        rows = kv_row('value', smash_pair_side(atom))
+    }
+    return `<div class="sub-section">
+        <div class="sub-head">${label}<span class="sub-meta">shape ${atom.shape} · ${short(atom.hash) || ''}</span></div>
+        ${rows}
+    </div>`
 }
 
 function render_cargo_card(c) {
     if(!c) return ''
-    let rows = ''
+    let body = `<div class="meta-line">shape ${c.shape} · <span class="meta-hash">${short(c.hash) || ''}</span></div>`
     if(c.pairs) {
-        c.pairs.forEach(([k, v]) => {
-            let kStr = reld(k) || (k.hash ? hash_link(k.hash) : cargo_value_display(k))
-            rows += kv_row(kStr, cargo_value_display(v))
-        })
+        c.pairs.forEach(([k, v]) => body += kv_row(smash_pair_side(k), smash_pair_side(v)))
     } else if(c.list) {
-        c.list.forEach((item, i) => rows += kv_row(`[${i}]`, cargo_value_display(item)))
+        c.list.forEach((item, i) => body += kv_row(`[${i}]`, smash_pair_side(item)))
+    } else if(c.shape === ARB) {
+        let raw = arb_to_twever(c)
+        body += kv_row('literal', `<span class="literal">${typeof raw === 'string' ? `"${raw}"` : raw}</span>`)
+    } else if(c.shape === TWIST) {
+        body += kv_row('twist', hash_link(c.hash))
     }
-    let body = `<div class="meta-line">shape ${c.shape} · ${short(c.hash) || ''}</div>${rows}`
     return card_open('cargo', 'Cargo') + body + card_close
 }
 
