@@ -37,12 +37,14 @@ const PAIRTRIE = 0x63
 const HASHLIST = 0x61
 const el = document.getElementById.bind(document)
 const vp = el('viewport')                    // <canvas> graph viewport
+const svgEl = el('viewport-svg')             // <svg> graph viewport (alternate)
 const ctx = vp.getContext('2d')
 let env = {}
 let lastSource = {kind: 'url', name: 'dq.toda'}
 let _palette = null                          // resolved CSS-var colours
 let _rainbow = false                         // rainbow toggle (canvas hue-rotate)
 let _rainbow_raf = 0
+let _mode = 'svg'                            // 'svg' or 'canvas' rendering mode
 
 let showpipe = pipe( buff_to_env
                    , start_timer
@@ -63,7 +65,8 @@ let showpipe = pipe( buff_to_env
                    , decorate_twists
                    , end_timer
                    , set_limits
-                   , env => (read_palette(), build_paths(), build_spatial_index(), env)
+                   , env => (read_palette(), build_paths(), build_spatial_index(),
+                             _mode === 'svg' ? render_svg(env) : null, env)
                    , select_focus
                    , write_stats
                    , env => (sync_toggles(), env)
@@ -401,14 +404,19 @@ function request_render() {
 // frame then just strokes/fills the cached paths.
 function build_paths() {
     let paths = {
-        edges: {},                   // {type: [solidPath2D, dashedPath2D]}
+        edges: {},                   // {type: [solidPath2D, dashedPath2D]} — full detail
+        edgesCoarse: {},             // {type: [solidPath2D, dashedPath2D]} — every 4th edge for LOD
         segConn: new Path2D(),       // straight connector line per collapsed segment
         nodesByColor: new Map(),     // {color: Path2D of all that color's circles}
         segMarkers: [],              // {x, y, color, count} list for bubble + text
     }
-    for(let type of EDGE_ORDER) paths.edges[type] = [new Path2D(), new Path2D()]
+    for(let type of EDGE_ORDER) {
+        paths.edges[type] = [new Path2D(), new Path2D()]
+        paths.edgesCoarse[type] = [new Path2D(), new Path2D()]
+    }
 
     let twists = env.shapes?.[TWIST] || []
+    let edgeIdx = 0
     for(let i = 0; i < twists.length; i++) {
         let from = twists[i]
         if(!from.cx) continue
@@ -422,11 +430,25 @@ function build_paths() {
             if(!(fx && fy && tx && ty)) continue
             let pair = paths.edges[type]
             if(!pair) continue
-            let p = pair[fx < tx ? 1 : 0]
+            let coarse = paths.edgesCoarse[type]
+            let dashIdx = fx < tx ? 1 : 0
+            let p = pair[dashIdx]
+            let cp = (edgeIdx & 3) === 0 ? coarse[dashIdx] : null
             p.moveTo(fx, fy)
-            if(type === 'teth') p.quadraticCurveTo((fx+tx+tx)/3, (ty+fy)/2, tx, ty)
-            else if(type === 'lead' || type === 'meet') p.quadraticCurveTo((fx+fx+tx)/3, (ty+fy)/2, tx, ty)
-            else p.lineTo(tx, ty)
+            if(cp) cp.moveTo(fx, fy)
+            if(type === 'teth') {
+                let cx1 = (fx+tx+tx)/3, cy1 = (ty+fy)/2
+                p.quadraticCurveTo(cx1, cy1, tx, ty)
+                if(cp) cp.quadraticCurveTo(cx1, cy1, tx, ty)
+            } else if(type === 'lead' || type === 'meet') {
+                let cx1 = (fx+fx+tx)/3, cy1 = (ty+fy)/2
+                p.quadraticCurveTo(cx1, cy1, tx, ty)
+                if(cp) cp.quadraticCurveTo(cx1, cy1, tx, ty)
+            } else {
+                p.lineTo(tx, ty)
+                if(cp) cp.lineTo(tx, ty)
+            }
+            edgeIdx++
         }
     }
 
@@ -483,19 +505,20 @@ function render_canvas(env) {
     let invS = 1 / s
     ctx.lineCap = 'butt'
 
-    // Level-of-detail: at deep zoom-out, individual edges and circle outlines
-    // are sub-pixel anyway. Skip cached paths and draw nodes as tiny rects
-    // (fillRect is ~10x faster than path-tracing arcs and doesn't blow up
-    // with content size).
-    let LOD_SIMPLE = s < 0.15
+    // Level-of-detail thresholds. We pick whether to use the fine cached
+    // edge paths or the every-4th coarse ones, and what opacity to draw
+    // edges at — they fade out between s=0.2 and s=0.05 so the transition
+    // to node-only rendering is graceful. Below s=0.05 we drop circles
+    // for fillRect squares entirely.
+    let LOD_RECTS  = s < 0.05
+    let LOD_COARSE = s < 0.2
+    let edgeAlpha  = s >= 0.2 ? 1 : Math.max(0, (s - 0.05) / 0.15)
 
-    if(LOD_SIMPLE) {
-        // Draw nodes as 2-world-unit squares so they're at least a pixel at
-        // s=0.5 and fade as we zoom further. Skip strokes and edges entirely.
+    if(LOD_RECTS) {
+        // Cheapest path: just node squares grouped by colour, no edges
         let twists = env.shapes?.[TWIST] || []
         let rectSize = Math.max(2 * invS, 1.5 * invS)
         let half = rectSize / 2
-        // Group nodes by color so we batch fillStyle changes
         let byColor = new Map()
         for(let i = 0; i < twists.length; i++) {
             let t = twists[i]
@@ -514,17 +537,24 @@ function render_canvas(env) {
             }
         }
     } else {
-        // 1) Stroke cached edge paths in order. prev/teth behind hitch edges.
-        for(let type of EDGE_ORDER) {
-            let pair = _paths.edges[type]
-            ctx.strokeStyle = pal[type]
-            ctx.lineWidth = invS
+        // 1) Stroke edges. Use coarse path (every 4th edge) below s=0.2 so
+        //    the rasterizer doesn't choke on full geometry at zoom-out;
+        //    fade opacity 0→1 across the transition range.
+        if(edgeAlpha > 0) {
+            ctx.globalAlpha = edgeAlpha
+            let bag = LOD_COARSE ? _paths.edgesCoarse : _paths.edges
+            for(let type of EDGE_ORDER) {
+                let pair = bag[type]
+                ctx.strokeStyle = pal[type]
+                ctx.lineWidth = invS
+                ctx.setLineDash([])
+                ctx.stroke(pair[0])
+                ctx.setLineDash([3 * invS])
+                ctx.stroke(pair[1])
+            }
             ctx.setLineDash([])
-            ctx.stroke(pair[0])
-            ctx.setLineDash([3 * invS])
-            ctx.stroke(pair[1])
+            ctx.globalAlpha = 1
         }
-        ctx.setLineDash([])
 
         // 2) Connector line between first/last of each collapsed segment
         ctx.strokeStyle = pal.prev
@@ -542,7 +572,7 @@ function render_canvas(env) {
     }
 
     // 4) Segment markers (semitransparent bubble + count text)
-    if(!LOD_SIMPLE && _paths.segMarkers.length) {
+    if(!LOD_RECTS && _paths.segMarkers.length) {
         ctx.setLineDash([4*invS, 2*invS])
         ctx.lineWidth = 2*invS
         ctx.strokeStyle = pal.prev
@@ -808,38 +838,68 @@ function pipe(...funs) {
 
 // DOM things
 
-vp.addEventListener('wheel', e => {
-    let ds = (201+Math.max(-200, Math.min(200, e.deltaY)))/200
-    env.vp.s = Math.max(0.02, Math.min(200, env.vp.s * ds))
-    request_render()
-    return e.preventDefault() || false
-})
+// Event delegation: bind to both viewport elements so handlers fire
+// regardless of which mode is active. Inside each handler we branch on
+// _mode to use either SVG-native DOM hit testing or canvas spatial index.
+function active_vp() { return _mode === 'svg' ? svgEl : vp }
 
-let panning = false
-vp.addEventListener('mousedown', e => { panning = true; vp.style.cursor = 'grabbing' })
-window.addEventListener('mouseup', e => { panning = false; vp.style.cursor = '' })
-vp.addEventListener('click', e => {
+function on_wheel(e) {
+    let ds = (201+Math.max(-200, Math.min(200, e.deltaY)))/200
+    env.vp.s = Math.max(0.0001, Math.min(200, env.vp.s * ds))
+    apply_view()
+    return e.preventDefault() || false
+}
+
+function on_click(e) {
+    if(_mode === 'svg') {
+        if(e.target.tagName === 'circle') {
+            let seg = env.segIndex?.[e.target.id]
+            if(seg) return expand_segment(seg)
+            select_node(e.target.id)
+        }
+        return
+    }
     if(!_spatial) return
     let w = event_to_world(e)
     let t = hit_test(w.x, w.y, 8)
     if(!t) return
     if(t.__seg) return expand_segment(t.__seg)
     select_node(t.hash)
+}
+
+let panning = false
+function on_mousedown(e) {
+    panning = true
+    active_vp().style.cursor = 'grabbing'
+}
+window.addEventListener('mouseup', e => {
+    panning = false
+    vp.style.cursor = ''
+    svgEl.style.cursor = ''
 })
+
 window.addEventListener('mousemove', e => {
     if(panning) {
         env.vp.x -= e.movementX / env.vp.s
         env.vp.y -= e.movementY / env.vp.s
-        request_render()
+        apply_view()
+        return
+    }
+    if(_mode === 'svg') {
+        if(e.target.tagName === 'circle') highlight_node(e.target.id)
         return
     }
     if(!_spatial || e.target !== vp) return
     let w = event_to_world(e)
     let t = hit_test(w.x, w.y, 8)
-    if(t && !t.__seg && t !== _highlighted) {
-        highlight_node(t.hash)
-    }
+    if(t && !t.__seg && t !== _highlighted) highlight_node(t.hash)
 })
+
+for(let elem of [vp, svgEl]) {
+    elem.addEventListener('wheel', on_wheel)
+    elem.addEventListener('mousedown', on_mousedown)
+    elem.addEventListener('click', on_click)
+}
 
 window.addEventListener('keydown', e => {
     let t = _selected
@@ -932,6 +992,7 @@ function toggle_collapse() {                  // collapse/expand all segments
     _selected = null; _highlighted = null
     relayout(env)
     build_paths(); build_spatial_index()
+    if(_mode === 'svg') render_svg(env)
     if(sel) select_node(sel)                 // restore selection (auto-expands if needed)
     scroll_to(env.vp.x, env.vp.y)
     sync_toggles()
@@ -943,6 +1004,7 @@ function expand_segment(seg) {               // open a collapsed segment
     _selected = null; _highlighted = null
     relayout(env)
     build_paths(); build_spatial_index()
+    if(_mode === 'svg') render_svg(env)
     scroll_to(vx, vy)
     select_node(seg.first.hash)
 }
@@ -955,6 +1017,7 @@ function select_node(id) {
         return expand_segment(seg)           // auto-expand on nav into collapsed region
     if(t.cx === undefined) return 0
     _selected = t
+    sync_svg_classes()
     let html = render_twist_card(t) + render_body_card(t.body) + render_cargo_card(t.body?.cargooo)
     el('select').innerHTML = html
     show_abject_info(id)
@@ -1179,6 +1242,7 @@ function hash_munge(str) {                   // beautiful nonsense
 function highlight_node(id) {
     let t = env.index?.[id]
     _highlighted = t || null
+    sync_svg_classes()
     let f = env.focus?.hash
     let h = id || f
     let html = ''
@@ -1187,12 +1251,108 @@ function highlight_node(id) {
     html += `<div class="focus-row"><span class="eyebrow">Highlight</span>`
           + `<span class="hash-line hl">${h ? hash_link(h) : '—'}</span></div>`
     el('highlight').innerHTML = html.replace(/onmouseover="[^"]*"/g, '')
-    request_render()
+    if(_mode === 'canvas') request_render()
 }
 
 function scroll_to(x, y) {
     env.vp.x = x; env.vp.y = y
-    request_render()
+    apply_view()
+}
+
+// Dispatch the active mode's view-update path. In SVG mode the rendered
+// DOM is fixed and pan/zoom is a CSS transform on the gtag wrapper. In
+// canvas mode, every view change is a redraw.
+function apply_view() {
+    if(_mode === 'svg') set_svg_transform()
+    else request_render()
+}
+
+let _svgRaf = 0, _svgTx = 0, _svgTy = 0, _svgTs = 1
+function set_svg_transform() {
+    _svgTx = -env.vp.x * env.vp.s + svgEl.clientWidth / 2
+    _svgTy = -env.vp.y * env.vp.s + svgEl.clientHeight / 2
+    _svgTs = env.vp.s
+    if(_svgRaf) return
+    _svgRaf = requestAnimationFrame(() => {
+        _svgRaf = 0
+        let g = el('gtag')
+        if(!g) return
+        g.style.transform = `translate(${_svgTx}px,${_svgTy}px) scale(${_svgTs})`
+    })
+}
+
+// Build the SVG DOM contents from current layout. Slow for huge graphs
+// (one element per twist + edge), but high-fidelity at any zoom.
+function render_svg(env) {
+    if(!env || !env.shapes) return
+    let svgs = '', edgestr = '', edges = []
+    let twists = env.shapes[TWIST] || []
+    for(let t of twists) {
+        if(!t.cx) continue
+        let seg = t.segment
+        if(seg?.collapsed && t !== seg.first && t !== seg.last) continue
+        svgs += `<circle cx="${t.cx}" cy="${t.cy}" r="5" fill="#${t.colour}" id="${t.hash}"/>`
+        for(let o of t.outies) edges.push([t, o[0], o[1]])
+    }
+    edges.sort((a, b) => EDGE_ORDER.indexOf(a[2]) - EDGE_ORDER.indexOf(b[2]))
+    for(let [from, to, type] of edges) {
+        let s1 = from.segment
+        if(s1?.collapsed && s1 === to.segment) continue
+        let fx = from.cx, fy = from.cy, tx = to.cx, ty = to.cy
+        if(!(fx && fy && tx && ty)) continue
+        let dashed = fx < tx ? ' dashed' : ''
+        if(type === 'teth')
+            edgestr += `<path d="M ${fx} ${fy} Q ${(fx+tx+tx)/3} ${(ty+fy)/2} ${tx} ${ty}" class="${type}${dashed}"/>`
+        else if(type === 'lead' || type === 'meet')
+            edgestr += `<path d="M ${fx} ${fy} Q ${(fx+fx+tx)/3} ${(ty+fy)/2} ${tx} ${ty}" class="${type}${dashed}"/>`
+        else
+            edgestr += `<path d="M ${fx} ${fy} L ${tx} ${ty}" class="${type}${dashed}"/>`
+    }
+    for(let seg of env.segments || []) {
+        if(!seg.collapsed) continue
+        let f = seg.first, l = seg.last
+        if(!f.cx || !l.cx) continue
+        edgestr += `<path d="M ${f.cx} ${f.cy} L ${l.cx} ${l.cy}" class="prev"/>`
+        let mx = (f.cx + l.cx)/2, my = f.cy
+        svgs += `<circle cx="${mx}" cy="${my}" r="8" fill="#${f.colour}" id="${seg.id}" opacity="0.6"/>`
+        svgs += `<text x="${mx}" y="${my+3}" text-anchor="middle" font-size="7" fill="#000" pointer-events="none">${seg.twists.length}</text>`
+    }
+    svgEl.innerHTML = `<g id="gtag" style="will-change:transform">${edgestr}${svgs}</g>`
+    set_svg_transform()
+    sync_svg_classes()
+}
+
+// Mirror the atom-ref selection/highlight/focus state onto SVG circles
+// as CSS classes. No-op in canvas mode (which draws overlays each frame).
+let _svgSelectedEl = null, _svgHighlightedEl = null, _svgFocusEl = null
+function sync_svg_classes() {
+    if(_mode !== 'svg') return
+    let sel = _selected ? document.getElementById(_selected.hash) : null
+    let hl  = _highlighted ? document.getElementById(_highlighted.hash) : null
+    let fc  = env.focus ? document.getElementById(env.focus.hash) : null
+    if(_svgSelectedEl && _svgSelectedEl !== sel) _svgSelectedEl.classList?.remove('select')
+    if(_svgHighlightedEl && _svgHighlightedEl !== hl) _svgHighlightedEl.classList?.remove('highlight')
+    if(_svgFocusEl && _svgFocusEl !== fc) _svgFocusEl.classList?.remove('focus')
+    sel?.classList.add('select')
+    hl?.classList.add('highlight')
+    fc?.classList.add('focus')
+    _svgSelectedEl = sel; _svgHighlightedEl = hl; _svgFocusEl = fc
+}
+
+function set_mode(m) {
+    if(m !== 'svg' && m !== 'canvas') return
+    _mode = m
+    el('app').dataset.mode = m
+    if(m === 'svg') {
+        render_svg(env)
+    } else {
+        request_render()
+    }
+    sync_toggles()
+}
+
+function toggle_mode() {
+    set_mode(_mode === 'svg' ? 'canvas' : 'svg')
 }
 
 function showhide(id) {
@@ -1408,9 +1568,10 @@ function emojex() {
 
 function sync_toggles() {
     let toggles = document.querySelectorAll('.toggles span')
-    if(toggles.length < 2) return
-    let [emo, rain] = toggles
-    emo.classList.toggle('on', env.emhx === 0)   // .on when in emoji mode
+    if(toggles.length < 3) return
+    let [emo, mode, rain] = toggles   // [emoji/hex, svg/canvas, rainbow, download]
+    emo.classList.toggle('on', env.emhx === 0)   // .on in emoji mode
+    mode.classList.toggle('on', _mode === 'canvas')  // .on in canvas mode
     rain.classList.toggle('on', _rainbow)
 }
 
@@ -1454,6 +1615,7 @@ window.slurp = slurp
 window.toggle_collapse = toggle_collapse
 window.expand_segment = expand_segment
 window.toggle_card = toggle_card
+window.toggle_mode = toggle_mode
 
 // aside open/close
 el('closeAside')?.addEventListener('click', () => el('app').dataset.aside = 'closed')

@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>T.R.I.E. · File Visualizer</title>
-    <link rel="stylesheet" href="style.css?v=11">
+    <link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
 
-<div class="app" id="app" data-search="" data-aside="open" data-theme="light">
+<div class="app" id="app" data-search="" data-aside="open" data-theme="light" data-mode="svg">
 
     <header class="masthead">
         <div class="brand">
@@ -74,8 +74,9 @@
         </div>
         <div class="tool toggles">
             <span onclick="emojex()">emoji/hex</span>
+            <span onclick="toggle_mode()">svg/canvas</span>
             <span onclick="rainbowsparkles()">rainbow</span>
-            <span onclick="download_svg()">download svg</span>
+            <span onclick="download_svg()">download</span>
         </div>
     </section>
 
@@ -97,6 +98,7 @@
                 <span class="legend"><span class="dot abject"></span>abject</span>
             </div>
             <div class="canvas">
+                <svg id="viewport-svg"></svg>
                 <canvas id="viewport"></canvas>
             </div>
         </div>
@@ -124,6 +126,6 @@
 
 </div>
 
-<script async src="svgiewer.js?v=13" type="module"></script>
+<script async src="svgiewer.js?v=14" type="module"></script>
 </body>
 </html>

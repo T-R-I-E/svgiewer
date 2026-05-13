@@ -244,13 +244,17 @@ input.field:focus { background: var(--hit-bg-focus); }
     flex: 1; position: relative; min-height: 0;
     background: var(--paper);
 }
-#viewport {
+#viewport, #viewport-svg {
+    position: absolute; inset: 0;
     display: block; width: 100%; height: 100%;
     cursor: grab;
     contain: layout style;
     -webkit-user-select: none;
     user-select: none;
 }
+/* Show only the viewport for the active rendering mode */
+.app[data-mode="svg"]    #viewport     { display: none; }
+.app[data-mode="canvas"] #viewport-svg { display: none; }
 
 /* ─────────── inspector ─────────── */
 .aside {
@@ -408,43 +412,43 @@ input.field:focus { background: var(--hit-bg-focus); }
 .hidden { display: none; }
 
 /* ─────────── graph node/edge styling (SVG content rendered by JS) ─────────── */
-#viewport [id^="seg_"] {
+#viewport-svg [id^="seg_"] {
     stroke: var(--stroke-prev);
     stroke-width: 2;
     stroke-dasharray: 4 2;
 }
-#viewport [id^="seg_"]:hover {
+#viewport-svg [id^="seg_"]:hover {
     opacity: 0.9 !important;
     r: 10;
     stroke: var(--stroke-focus);
 }
-#viewport circle {
+#viewport-svg circle {
     stroke: var(--stroke-default);
     stroke-width: 1;
 }
-#viewport path {
+#viewport-svg path {
     fill: none;
     pointer-events: none;
 }
-#viewport .prev { stroke: var(--stroke-prev); stroke-linecap: butt; }
-#viewport .teth { stroke: var(--stroke-teth); stroke-linecap: butt; }
-#viewport .lead { stroke: var(--stroke-lead); stroke-linecap: butt; }
-#viewport .meet { stroke: var(--stroke-meet); stroke-linecap: butt; }
-#viewport .post { stroke: var(--stroke-post); stroke-linecap: butt; }
-#viewport .cargo { stroke: var(--stroke-cargo); stroke-linecap: butt; }
-#viewport .dashed { stroke-dasharray: 3; }
-#viewport .focus {
+#viewport-svg .prev { stroke: var(--stroke-prev); stroke-linecap: butt; }
+#viewport-svg .teth { stroke: var(--stroke-teth); stroke-linecap: butt; }
+#viewport-svg .lead { stroke: var(--stroke-lead); stroke-linecap: butt; }
+#viewport-svg .meet { stroke: var(--stroke-meet); stroke-linecap: butt; }
+#viewport-svg .post { stroke: var(--stroke-post); stroke-linecap: butt; }
+#viewport-svg .cargo { stroke: var(--stroke-cargo); stroke-linecap: butt; }
+#viewport-svg .dashed { stroke-dasharray: 3; }
+#viewport-svg .focus {
     r: 9;
     stroke-width: 4;
     stroke: var(--stroke-focus);
 }
-#viewport .highlight {
+#viewport-svg .highlight {
     r: 8;
     stroke-width: 4;
     stroke-opacity: 50%;
     stroke: var(--stroke-highlight);
 }
-#viewport .select {
+#viewport-svg .select {
     r: 8;
     fill-opacity: 50%;
     stroke-width: 3;
