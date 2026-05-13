@@ -38,6 +38,7 @@ const HASHLIST = 0x61
 const el = document.getElementById.bind(document)
 const vp = el('viewport')                    // svg canvas
 let env = {}
+let lastSource = {kind: 'url', name: 'dq.toda'}
 
 let showpipe = pipe( buff_to_env
                    , start_timer
@@ -61,6 +62,7 @@ let showpipe = pipe( buff_to_env
                    , render_svg
                    , select_focus
                    , write_stats
+                   , env => (sync_toggles(), env)
                    )
 
 function buff_to_env(buff) {
@@ -453,7 +455,7 @@ function render_svg(env) {
 
 function select_focus(env) {
     if(!env.shapes[TWIST])
-        el('stats').innerHTML = 'There are no twists in this file!'
+        el('highlight').innerHTML = '<p>There are no twists in this file!</p>'
     env.focus = env.shapes[TWIST][env.shapes[TWIST].length-1]
     let seg = env.focus.segment
     if(seg?.collapsed) seg.collapsed = false  // ensure focus twist is visible
@@ -464,21 +466,52 @@ function select_focus(env) {
 }
 
 function write_stats(env) {
-    el('stats').innerHTML =
-    `<p>Analyzed ${env.buff.byteLength.toLocaleString()} bytes
-        containing ${env.atoms.length.toLocaleString()} atoms
-        with ${env.dupes.length.toLocaleString()} duplicates
-        in ${(env.time.end-env.time.start).toFixed(0)}ms. </p>
-     <p>There are ${env.shapes[TWIST].length.toLocaleString()} twists,
-        ${env.shapes[BODY].length.toLocaleString()} bodies,
-        and <a href="" onclick="showhide('errors');return false">${env.errors.length.toLocaleString()} errors</a>. </p>
-     <p><a href="" onclick="emojex();return false">emoji/hex</a>
-        <a href="" onclick="rainbowsparkles();return false">rainbow/sparkles</a>
-        <a href="" onclick="download_svg();return false">download svg</a>
-        <a href="" onclick="toggle_collapse();return false">collapse/expand</a> </p>
-     <div id="errors" class="hidden"><p>${hash_munge(env.errors.map(e=>e.message).join('</p><p>'))}</p></div>`
+    let twistCount = env.shapes[TWIST]?.length || 0
+    let bodyCount  = env.shapes[BODY]?.length || 0
+    let errCount   = env.errors.length
+    el('stat-bytes').textContent       = env.buff.byteLength.toLocaleString()
+    el('stat-atoms').textContent       = env.atoms.length.toLocaleString()
+    el('stat-atoms-sub').textContent   = `${env.dupes.length.toLocaleString()} duplicates`
+    el('stat-twists').textContent      = twistCount.toLocaleString()
+    let errLink = errCount
+        ? `<a href="" onclick="open_errors();return false">${errCount.toLocaleString()} errors</a>`
+        : `${errCount.toLocaleString()} errors`
+    el('stat-twists-sub').innerHTML    = `${bodyCount.toLocaleString()} bodies · ${errLink}`
+    el('stat-parse').textContent       = `${(env.time.end-env.time.start).toFixed(0)} ms`
+    el('stat-source').textContent      = lastSource.name
+    el('stat-source-sub').textContent  = lastSource.kind === 'file' ? 'Uploaded' : 'Loaded from URL'
+    el('errors').innerHTML = errCount ? render_errors_card(env.errors) : ''
     return env
 }
+
+function render_errors_card(errs) {
+    let rows = errs.map((e, i) =>
+        `<div class="err-row">
+            <span class="err-marker">${i + 1}</span>
+            <span class="err-msg">${munge_error_msg(e.message)}</span>
+        </div>`).join('')
+    return `<div class="card errors collapsed">
+        <div class="h-row" onclick="toggle_card(this.parentElement)">
+            <h2>Errors</h2>
+            <span class="err-count">${errs.length}</span>
+            <span class="card-chev">▾</span>
+        </div>
+        <div class="card-body">${rows}</div>
+    </div>`
+}
+
+function munge_error_msg(text) {
+    // shorten 66-char hashes (41/22 + 64 hex) and link them when known
+    return String(text).replace(/"?((?:41|22)[0-9a-f]{64})"?/gi, (_, h) => hash_link(h))
+}
+
+function open_errors() {
+    let card = el('errors')?.querySelector('.card.errors')
+    if(!card) return
+    card.classList.remove('collapsed')
+    card.scrollIntoView({behavior: 'smooth', block: 'nearest'})
+}
+window.open_errors = open_errors
 
 function probe(env) {
     console.log(env)
@@ -613,6 +646,8 @@ window.addEventListener('keydown', e => {
 
 el('todafile').oninput = function (t) {
     let file = t.srcElement.files?.[0]
+    if(!file) return
+    lastSource = {kind: 'file', name: file.name}
     showpipe(file.arrayBuffer())
 }
 
@@ -624,14 +659,44 @@ el('todaurl').oninput = function (e) {
 
 el('search').oninput = function (e) {
     let str = e.target.value
-    let t = Object.values(env.index).find(t => t.hash.includes(str))
+    render_hits(str)
+    if(!str) return
+    let t = Object.values(env.index).find(t => t.hash?.includes(str))
     if(!t) return 0
     select_node(t.hash)
+}
+
+function render_hits(query) {
+    el('app').dataset.search = query
+    el('hitsQuery').textContent = query || '—'
+    let list = el('hitsList')
+    if(!query) {
+        el('hitsCount').textContent = '0 hits'
+        list.innerHTML = ''
+        return
+    }
+    let matches = Object.values(env.index || {}).filter(t => t.shape === TWIST && t.hash?.includes(query))
+    el('hitsCount').textContent = `${matches.length} hit${matches.length === 1 ? '' : 's'}`
+    let chips = matches.slice(0, 24).map(t => {
+        let h = t.hash
+        let s = short(h)
+        let i = s.indexOf(query)
+        let body
+        if(i >= 0) {
+            body = s.slice(0, i) + `<span class="pre">${s.slice(i, i + query.length)}</span>` + s.slice(i + query.length)
+        } else {
+            body = s   // match is in the elided middle; show short form plain
+        }
+        let cur = _selected?.id === h ? ' current' : ''
+        return `<span class="hit${cur}" onclick="select_node('${h}')">${body}</span>`
+    }).join('')
+    list.innerHTML = chips
 }
 
 // DOM helpers
 
 function fetch_url(url) {
+    lastSource = {kind: 'url', name: url}
     return fetch(url)
            .then(res => showpipe(res.arrayBuffer()))
            .catch(err => console.error(err)) // stop trying to make fetch happen
@@ -657,6 +722,7 @@ function toggle_collapse() {                  // collapse/expand all segments
     if(focus) el(focus)?.classList.add('focus')
     if(sel) select_node(sel)                 // restore selection (auto-expands if needed)
     scroll_to(env.vp.x, env.vp.y)
+    sync_toggles()
 }
 
 function expand_segment(seg) {               // open a collapsed segment
@@ -682,15 +748,124 @@ function select_node(id) {
     _selected?.classList.remove('select')
     _selected = dom
     dom.classList.add('select')
-    let html = ''
-    html += `Twist<pre>${JSON.stringify(t,              strsmasher, 1)}</pre>`
-    html += `Body <pre>${JSON.stringify(t.body,         strsmasher, 1)}</pre>`
-    html += `Cargo<pre>${JSON.stringify(t.body.cargooo, strsmasher, 1)}</pre>`
-    el('select').innerHTML = hash_munge(html)
-    // setTimeout(x => show_abject_info(id), 0) // pause for responsiveness
+    let html = render_twist_card(t) + render_body_card(t.body) + render_cargo_card(t.body?.cargooo)
+    el('select').innerHTML = html
     show_abject_info(id)
     scroll_to(t.cx, t.cy)
 }
+
+// ─── inspector rendering helpers ───
+function short(h) {
+    if(!h || typeof h !== 'string') return ''
+    if(h.length <= 16) return h
+    return h.slice(0, 10) + '…' + h.slice(-4)
+}
+
+function display_hash(h) {
+    if(!h || typeof h !== 'string') return ''
+    if(env.emhx === 0) {
+        if(!env.emojis) env.emojis = get_me_all_the_emoji()
+        let n = env.emojis.length || 1
+        let pick = (i, j) => env.emojis[parseInt(h.slice(i, j) || '0', 16) % n]
+        return pick(2,10) + pick(10,18) + pick(18,26)
+    }
+    return short(h)
+}
+
+function hash_link(h, cls) {
+    if(!h) return '—'
+    let label = display_hash(h)
+    let t = env.index?.[h]
+    if(t?.shape === TWIST)
+        return `<a class="${cls||''}" href="" onclick="select_node('${h}');return false" onmouseover="highlight_node('${h}')">${label}</a>`
+    return `<span class="${cls||''}">${label}</span>`
+}
+
+function kv_row(k, vHtml, vCls) {
+    return `<div class="kv"><span class="k">${k}</span><span class="v ${vCls||''}">${vHtml}</span></div>`
+}
+
+function card_open(cls, title) {
+    return `<div class="card ${cls}">
+        <div class="h-row" onclick="toggle_card(this.parentElement)">
+            <h2>${title}</h2>
+            <span class="card-chev">▾</span>
+        </div>
+        <div class="card-body">`
+}
+const card_close = `</div></div>`
+
+function edge_types(edges) {
+    return [...new Set(edges.map(e => e[1]))].join(', ') || '—'
+}
+
+function render_twist_card(t) {
+    if(!t) return ''
+    let body = `<div class="meta-line">shape ${t.shape} · findex ${t.findex ?? '—'}</div>`
+        + kv_row('hash',   hash_link(t.hash))
+        + kv_row('body',   hash_link(t.body?.hash))
+        + kv_row('innies', `{ ${edge_types(t.innies||[])} }`, 'teal')
+        + kv_row('outies', `{ ${edge_types(t.outies||[])} }`, 'teal')
+        + kv_row('succ',   t.succ?.length ? t.succ.map(s => hash_link(s.hash)).join(', ') : '[ ]')
+        + kv_row('prev',   hash_link(t.prev?.hash || t.body?.prevhash), 'teal')
+        + kv_row('teth',   hash_link(t.teth?.hash || t.body?.tethhash), 'amber')
+        + kv_row('first',  hash_link(t.first?.hash), 'lime')
+        + kv_row('segment', t.segment?.id ? short(t.segment.id) : '—')
+    return card_open('twist', 'Twist') + body + card_close
+}
+
+function render_body_card(b) {
+    if(!b) return ''
+    let body = `<div class="meta-line">shape ${b.shape} · reqs ${b.reqs ? short(b.reqs) : 0}</div>`
+        + kv_row('hash', hash_link(b.hash))
+        + kv_row('prev', hash_link(b.prev?.hash || b.prevhash), 'teal')
+        + kv_row('teth', hash_link(b.teth?.hash || b.tethhash), 'amber')
+        + kv_row('shld', hash_link(b.shld), 'lime')
+        + kv_row('rigs', hash_link(b.rigs), 'lime')
+        + kv_row('carg', hash_link(b.carg))
+    return card_open('body', 'Body') + body + card_close
+}
+
+function cargo_value_display(v) {
+    if(!v) return '—'
+    if(v.hash) return hash_link(v.hash)
+    if(v.shape === ARB) {
+        let raw = arb_to_twever(v)
+        return typeof raw === 'string' ? raw : String(raw)
+    }
+    if(typeof v === 'string') return short(v)
+    return reld(v) || '?'
+}
+
+function render_cargo_card(c) {
+    if(!c) return ''
+    let rows = ''
+    if(c.pairs) {
+        c.pairs.forEach(([k, v]) => {
+            let kStr = reld(k) || (k.hash ? hash_link(k.hash) : cargo_value_display(k))
+            rows += kv_row(kStr, cargo_value_display(v))
+        })
+    } else if(c.list) {
+        c.list.forEach((item, i) => rows += kv_row(`[${i}]`, cargo_value_display(item)))
+    }
+    let body = `<div class="meta-line">shape ${c.shape} · ${short(c.hash) || ''}</div>${rows}`
+    return card_open('cargo', 'Cargo') + body + card_close
+}
+
+function render_abject_card(info, ms) {
+    if(!info) return ''
+    let mintHtml = info.mintingInfo
+        ? `<pre style="margin:0;font-size:11px;white-space:pre-wrap;word-break:break-all">${JSON.stringify(info.mintingInfo, null, 1)}</pre>`
+        : '—'
+    let body = `<div class="meta-line">generated in ${ms} ms</div>`
+        + kv_row('quantity',  info.quantity ?? '—')
+        + kv_row('precision', info.displayPrecision ?? '—')
+        + kv_row('value',     info.displayValue ?? '—')
+        + kv_row('minting',   mintHtml)
+    return card_open('abject', 'Abject') + body + card_close
+}
+
+function toggle_card(card) { card.classList.toggle('collapsed') }
 
 function strsmasher(k, v) {
     if(['bin', 'x', 'y', 'cx', 'cy', 'colour', 'cargooo'].includes(k))
@@ -732,9 +907,14 @@ function highlight_node(id) {
     _highlighted?.classList.remove('highlight')
     _highlighted = el(id)
     _highlighted?.classList?.add('highlight')
-    let html  = `<p>Focus: ${hash_munge('"'+env.focus.hash+'"')}</p>`
-        html += `<p>Highlight: "${id}"</p>`  // focus is here so it refreshes w/ emojihex
-    el('highlight').innerHTML = hash_munge(html).replace(/onmouseover=".*?"/, '') // does not play well with onclick
+    let f = env.focus?.hash
+    let h = id || f
+    let html = ''
+    html += `<div class="focus-row"><span class="eyebrow">Focus</span>`
+          + `<span class="hash-line">${f ? hash_link(f) : '—'}</span></div>`
+    html += `<div class="focus-row"><span class="eyebrow">Highlight</span>`
+          + `<span class="hash-line hl">${h ? hash_link(h) : '—'}</span></div>`
+    el('highlight').innerHTML = html.replace(/onmouseover="[^"]*"/g, '')
 }
 
 function scroll_to(x, y) {
@@ -776,11 +956,12 @@ function show_abject_info(id) {
                    , displayValue: DQ.quantityToDisplay(abject.quantity, abject.displayPrecision)
                    , mintingInfo: abject.mintingInfo } //, root: env.abject.rootContext()}
         let newtime = performance.now()
-        // el('abject').innerHTML = "Abject info: " + JSON.stringify(env.info, 0, 2) + ` in ${(newtime-time).toFixed(1)}ms`
-        el('abject').innerHTML = `<details><summary>Abject info, generated in ${(newtime-time).toFixed(1)}ms </summary>` + JSON.stringify(env.info, 0, 2) + '</details>'
+        let abjectMs = (newtime-time).toFixed(1)
+        el('abject').innerHTML = render_abject_card(env.info, abjectMs)
+        el('stat-parse-sub').textContent = `abject info ${abjectMs} ms`
 
         abject.checkAllRigs().then(_ => {
-            el('rigcheck').innerHTML = `Rigs checked successfully in ${(performance.now()-newtime).toFixed(1)}ms!`
+            el('rigcheck').innerHTML = `<span class="pass">PASS</span><span class="ms">${(performance.now()-newtime).toFixed(1)} ms</span>`
         }).catch(_ => {
 
             // //XXX(sfertman): BEGIN ~~ TODA INSTANT REALAY CERTIFIED HACK ~~
@@ -862,21 +1043,37 @@ function show_abject_info(id) {
             const ti = new TwinInterpreter(Line.fromTwist(twist), abject.poptop());
             return ti.verifyTopline()
                 .then(_ => ti.verifyHitchLine(twist.getHash()))
-                .then(_ => el('rigcheck').innerHTML = `Integrity certified by TodaQ instant relay in ${(performance.now()-newtime).toFixed(1)}ms!`)
+                .then(_ => el('rigcheck').innerHTML = `<span class="pass">RELAY</span><span class="ms">${(performance.now()-newtime).toFixed(1)} ms</span>`)
             // //XXX(sfertman): END ~~ TODA INSTANT REALAY CERTIFIED HACK ~~
         }).catch(e => {
-            el('rigcheck').innerHTML = `Rig check failed, consuming ${(performance.now()-newtime).toFixed(1)}ms of precious battery life`
+            el('rigcheck').innerHTML = `<span class="pass fail">FAIL</span><span class="ms">${(performance.now()-newtime).toFixed(1)} ms</span>`
             console.error(e)
         });
     } catch(e) {
-        el('abject').innerHTML = 'Not an abject'
-        el('rigcheck').innerHTML = ''
+        el('abject').innerHTML = ''
+        el('rigcheck').innerHTML = `<span class="ms">Not an abject</span>`
+        el('stat-parse-sub').textContent = ''
     }
 }
 
+const SVG_EXPORT_STYLES = `
+    circle { stroke: #15110b; stroke-width: 1; }
+    path { fill: none; }
+    .prev  { stroke: #999; stroke-linecap: butt; }
+    .teth  { stroke: #f9f; stroke-linecap: butt; }
+    .lead  { stroke: rgb(61,255,51); stroke-linecap: butt; }
+    .meet  { stroke: #86f; stroke-linecap: butt; }
+    .post  { stroke: rgb(255,174,60); stroke-linecap: butt; }
+    .cargo { stroke: rgb(255,0,0); stroke-linecap: butt; }
+    .dashed { stroke-dasharray: 3; }
+    .focus { r: 9; stroke-width: 4; stroke: #ff17c9; }
+    .highlight { r: 8; stroke-width: 4; stroke-opacity: 50%; stroke: yellow; }
+    .select { r: 8; fill-opacity: 50%; stroke-width: 3; stroke: rgb(0,255,60); }
+`
+
 function download_svg() {
     let head = `<svg title="graph" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="${env.limits.minx - 10} ${env.limits.miny - 10} ${env.limits.manx + 10} ${env.limits.many + 20}">`;
-    let style = "<style>" + el('style').innerHTML + "</style>";
+    let style = "<style>" + SVG_EXPORT_STYLES + "</style>";
     let svg_data = vp.innerHTML;
     let full_svg = head + style + svg_data + "</svg>";
 
@@ -889,14 +1086,24 @@ function download_svg() {
 }
 
 function rainbowsparkles() {
-    ;[...document.querySelectorAll('path')].forEach(p=>p.classList.toggle('rainbowsparkles'))
-    ;[...document.querySelectorAll('circle')].forEach(p=>p.classList.toggle('nodesparkles'))
+    ;[...vp.querySelectorAll('path')].forEach(p=>p.classList.toggle('rainbowsparkles'))
+    ;[...vp.querySelectorAll('circle')].forEach(p=>p.classList.toggle('nodesparkles'))
+    sync_toggles()
 }
 
 function emojex() {
     env.emhx ^= 1
     select_node(_selected?.id)
     highlight_node(_highlighted?.id)
+    sync_toggles()
+}
+
+function sync_toggles() {
+    let toggles = document.querySelectorAll('.toggles span')
+    if(toggles.length < 2) return
+    let [emo, rain] = toggles
+    emo.classList.toggle('on', env.emhx === 0)   // .on when in emoji mode
+    rain.classList.toggle('on', !!vp.querySelector('.rainbowsparkles, .nodesparkles'))
 }
 
 function get_me_all_the_emoji() {            // over-the-top emoji fetching courtesy of bogomoji
@@ -938,6 +1145,11 @@ window.emojex = emojex
 window.slurp = slurp
 window.toggle_collapse = toggle_collapse
 window.expand_segment = expand_segment
+window.toggle_card = toggle_card
+
+// aside open/close
+el('closeAside')?.addEventListener('click', () => el('app').dataset.aside = 'closed')
+el('openAside')?.addEventListener('click', () => el('app').dataset.aside = 'open')
 
 
 // init

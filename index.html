@@ -2,38 +2,124 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TODA File Explorer</title>
-    <link rel="stylesheet" href="style.css">
+    <title>T.R.I.E. · File Visualizer</title>
+    <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
-    <div id="outer">
-        <svg id="viewport">
-            <!-- Main graph will be here -->
-            <!-- Legend will be added programmatically as a separate layer -->
-        </svg>
-        <div id="sidebar">
-            <h2>TODA File Analysis Tool</h2>
-            <p><em>For very serious use only</em></p>
-            <p>Arrows and click select, hover highlights, scroll zooms.
-                Highly experimental, results dubious.
-                <!-- <a href="">Source</a> -->
-            </p>
-            <p>
-                URL: <input type="text" id="todaurl" value="dq.toda" />
-                Upload: <input type="file" id="todafile" accept="" />
-            </p>
-            <p>
-                Search: <input type="text" id="search" value="" />
-            </p>
-            <div id="abject"></div>
-            <div id="rigcheck"></div>
-            <div id="stats"></div>
-            <div id="highlight"></div>
-            <div id="select"></div>
+
+<div class="app" id="app" data-search="" data-aside="open">
+
+    <header class="masthead">
+        <div class="brand">
+            <svg width="44" height="26" viewBox="-2 -2 154 92" aria-hidden="true">
+                <path d="M 0 0 L 100 0 L 50 86.6 Z" fill="rgba(0,0,0,0.08)"></path>
+                <path d="M 100 0 L 50 86.6 L 150 86.6 Z" fill="none" stroke="currentColor" stroke-width="2"></path>
+                <path d="M 100 0 L 88.2 86.6" fill="none" stroke="currentColor" stroke-width="2"></path>
+            </svg>
+            <div class="wordmark">T.R.I.E.</div>
+            <div class="meta">File Visualizer<br><span class="ver">v1.42.1</span></div>
         </div>
-        <script async src="svgiewer.js" type="module"></script>
-    </div>
+        <div class="instructions">↑↓ traverse hitches · ←→ traverse the line · click selects · hover highlights · scroll zooms · drag pans · click any hash to follow it</div>
+    </header>
+
+    <section class="stats">
+        <div class="stat">
+            <div class="label">Bytes</div>
+            <div class="value" id="stat-bytes">—</div>
+        </div>
+        <div class="stat">
+            <div class="label">Atoms</div>
+            <div class="value" id="stat-atoms">—</div>
+            <div class="sub" id="stat-atoms-sub"></div>
+        </div>
+        <div class="stat tw big">
+            <div class="label">Twists</div>
+            <div class="value" id="stat-twists">—</div>
+            <div class="sub" id="stat-twists-sub"></div>
+        </div>
+        <div class="stat par">
+            <div class="label">Parse</div>
+            <div class="value" id="stat-parse">—</div>
+            <div class="sub" id="stat-parse-sub"></div>
+        </div>
+        <div class="stat rig">
+            <div class="label">Rig check</div>
+            <div class="value" id="rigcheck">—</div>
+        </div>
+        <div class="stat src">
+            <div class="label">Source</div>
+            <div class="source" id="stat-source">—</div>
+            <div class="loaded" id="stat-source-sub"></div>
+        </div>
+    </section>
+
+    <section class="toolbar">
+        <div class="tool">
+            <span class="lbl">URL</span>
+            <input type="text" id="todaurl" class="field" value="dq.toda" />
+        </div>
+        <div class="tool">
+            <span class="lbl">Upload</span>
+            <input type="file" id="todafile" class="field dash" />
+        </div>
+        <div class="tool grow">
+            <span class="lbl">Search</span>
+            <input type="text" id="search" class="field search" value="" autocomplete="off" />
+            <span class="hits-count" id="hitsCount">0 hits</span>
+        </div>
+        <div class="tool toggles">
+            <span onclick="emojex()">emoji/hex</span>
+            <span onclick="rainbowsparkles()">rainbow</span>
+            <span onclick="download_svg()">download svg</span>
+        </div>
+    </section>
+
+    <section class="hits" id="hits">
+        <span class="for">Hits for <span class="query" id="hitsQuery">—</span></span>
+        <span id="hitsList"></span>
+    </section>
+
+    <section class="body">
+
+        <div class="graph">
+            <div class="panel-bar">
+                <span class="title">RIG</span>
+                <span class="legend"><span class="dot teth"></span>tether</span>
+                <span class="legend"><span class="dot lead"></span>lead</span>
+                <span class="legend"><span class="dot meet"></span>meet</span>
+                <span class="legend"><span class="dot post"></span>post</span>
+                <span class="legend"><span class="dot prev"></span>prev</span>
+                <span class="legend"><span class="dot abject"></span>abject</span>
+            </div>
+            <div class="canvas">
+                <svg id="viewport"></svg>
+            </div>
+        </div>
+
+        <aside class="aside">
+            <div class="panel-bar">
+                <span class="title">Inspector</span>
+                <span class="actions">
+                    <button class="icon-btn" id="closeAside" title="Close inspector" aria-label="Close inspector">×</button>
+                </span>
+            </div>
+            <div class="scroll">
+                <div id="highlight"></div>
+                <div id="abject"></div>
+                <div id="select"></div>
+                <div id="errors"></div>
+            </div>
+        </aside>
+
+        <button class="rail" id="openAside" title="Open inspector" aria-label="Open inspector">
+            <span class="vert">‹  Inspector</span>
+        </button>
+
+    </section>
+
+</div>
+
+<script async src="svgiewer.js?v=6" type="module"></script>
 </body>
 </html>
