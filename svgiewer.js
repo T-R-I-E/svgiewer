@@ -796,7 +796,17 @@ function card_open(cls, title) {
 const card_close = `</div></div>`
 
 function edge_types(edges) {
-    return [...new Set(edges.map(e => e[1]))].join(', ') || '—'
+    // Group edges by type, keep the first target per type, render each
+    // type as a link that hovers/clicks like the underlying hash would.
+    let firstByType = new Map()
+    edges.forEach(([target, type]) => {
+        if(!firstByType.has(type)) firstByType.set(type, target?.hash)
+    })
+    if(firstByType.size === 0) return '—'
+    return [...firstByType.entries()].map(([type, h]) =>
+        h ? `<a href="" onclick="select_node('${h}');return false" onmouseover="highlight_node('${h}')">${type}</a>`
+          : type
+    ).join(', ')
 }
 
 function render_twist_card(t) {
@@ -866,18 +876,44 @@ function render_atom_subsection(label, atom) {
     </div>`
 }
 
+// Render a single pair entry. If the value side is itself a pair-trie /
+// hash-list atom, recurse into a labeled block; otherwise it's a flat
+// terminal kv row.
+function render_pair_entry(k, v) {
+    let kHtml = smash_pair_side(k)
+    if(v && typeof v === 'object' && (v.pairs || v.list)) {
+        return `<div class="trie-block">
+            <div class="trie-label">${kHtml}</div>
+            <div class="trie-body">${render_trie_content(v)}</div>
+        </div>`
+    }
+    return `<div class="kv"><span class="k">${kHtml}</span><span class="v">${smash_pair_side(v)}</span></div>`
+}
+
+function render_trie_body(atom) {
+    let html = ''
+    if(atom.pairs) {
+        atom.pairs.forEach(([k, v]) => html += render_pair_entry(k, v))
+    } else if(atom.list) {
+        atom.list.forEach((item, i) => html += render_pair_entry(`[${i}]`, item))
+    }
+    return html
+}
+
+function render_trie_content(atom) {
+    return `<div class="trie-meta">shape ${atom.shape} · <span class="meta-hash">${short(atom.hash) || ''}</span></div>${render_trie_body(atom)}`
+}
+
 function render_cargo_card(c) {
     if(!c) return ''
     let body = `<div class="meta-line">shape ${c.shape} · <span class="meta-hash">${short(c.hash) || ''}</span></div>`
-    if(c.pairs) {
-        c.pairs.forEach(([k, v]) => body += kv_row(smash_pair_side(k), smash_pair_side(v)))
-    } else if(c.list) {
-        c.list.forEach((item, i) => body += kv_row(`[${i}]`, smash_pair_side(item)))
+    if(c.pairs || c.list) {
+        body += render_trie_body(c)
     } else if(c.shape === ARB) {
         let raw = arb_to_twever(c)
-        body += kv_row('literal', `<span class="literal">${typeof raw === 'string' ? `"${raw}"` : raw}</span>`)
+        body += `<div class="kv"><span class="k">literal</span><span class="v"><span class="literal">${typeof raw === 'string' ? `"${raw}"` : raw}</span></span></div>`
     } else if(c.shape === TWIST) {
-        body += kv_row('twist', hash_link(c.hash))
+        body += `<div class="kv"><span class="k">twist</span><span class="v">${hash_link(c.hash)}</span></div>`
     }
     return card_open('cargo', 'Cargo') + body + card_close
 }

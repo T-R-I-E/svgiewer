@@ -374,6 +374,30 @@ input.field:focus { background: var(--hit-bg-focus); }
    instead of using the label/value column proportions */
 .card .sub-section .kv { grid-template-columns: 1fr 1fr; }
 
+/* cargo entries are alias-named keys with hash/alias values — split evenly
+   and allow keys to wrap on long aliases like "DQ :: minting-info :: DI :: FWW" */
+.card.cargo .kv { grid-template-columns: 1fr 1fr; }
+.card.cargo .kv > .k { word-break: break-word; }
+
+/* recursive trie unpack: when a pair value is itself a pair-trie or
+   hash-list, the value becomes a labeled indented block instead of a flat
+   right-column cell. Used for cargo contents and any future nested ties. */
+.trie-block { margin: 8px 0; }
+.trie-block > .trie-label {
+    font-family: var(--mono); font-size: 12px;
+    margin-bottom: 4px; word-break: break-word;
+}
+.trie-block > .trie-body {
+    padding-left: 12px;
+    border-left: 2px solid var(--dotted);
+    margin-left: 2px;
+}
+.trie-meta {
+    font-size: 10px; opacity: .55;
+    font-family: var(--mono); letter-spacing: 0;
+    margin-bottom: 6px;
+}
+
 /* preserve case + monospace for hashes inside meta-lines (otherwise they
    pick up the uppercase text-transform meant for labels) */
 .card .meta-line .meta-hash {
