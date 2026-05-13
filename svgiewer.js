@@ -47,6 +47,9 @@ let _rainbow_raf = 0
 let _mode = 'svg'                            // 'svg' or 'canvas' rendering mode
 const SIZE_LOCK_TWISTS = 2000                // files with more twists than this are forced to canvas+no-rainbow
 let _size_locked = false
+let _rigGen = 0                              // increments on every check request; stale results discarded
+let _rigPending = 0                          // setTimeout handle for the debounced check
+const RIG_DEBOUNCE_MS = 300                  // wait this long after selection before kicking off the check
 
 let showpipe = pipe( buff_to_env
                    , start_timer
@@ -76,8 +79,11 @@ let showpipe = pipe( buff_to_env
                    )
 
 function buff_to_env(buff) {
-    env = {buff, atoms:[], dupes:[], index:{}, shapes:{}, errors:[], firsts:[], vp:{x:0,y:0,s:1}, emojis:0, emhx:1}
+    env = {buff, atoms:[], dupes:[], index:{}, shapes:{}, errors:[], firsts:[],
+           vp:{x:0,y:0,s:1}, emojis:0, emhx:1, rigResults:{}}
     window.env = env                         // make a global for DOM consumption
+    _rigGen++                                // invalidate any in-flight rig check
+    if(_rigPending) { clearTimeout(_rigPending); _rigPending = 0 }
     return env
 }
 
@@ -707,20 +713,27 @@ function select_focus(env) {
 function write_stats(env) {
     let twistCount = env.shapes[TWIST]?.length || 0
     let bodyCount  = env.shapes[BODY]?.length || 0
-    let errCount   = env.errors.length
     el('stat-bytes').textContent       = env.buff.byteLength.toLocaleString()
     el('stat-atoms').textContent       = env.atoms.length.toLocaleString()
     el('stat-atoms-sub').textContent   = `${env.dupes.length.toLocaleString()} duplicates`
     el('stat-twists').textContent      = twistCount.toLocaleString()
-    let errLink = errCount
-        ? `<a href="" onclick="open_errors();return false">${errCount.toLocaleString()} errors</a>`
-        : `${errCount.toLocaleString()} errors`
-    el('stat-twists-sub').innerHTML    = `${bodyCount.toLocaleString()} bodies · ${errLink}`
+    el('stat-twists-sub').textContent  = `${bodyCount.toLocaleString()} bodies`
     el('stat-parse').textContent       = `${(env.time.end-env.time.start).toFixed(0)} ms`
     el('stat-source').textContent      = lastSource.name
     el('stat-source-sub').textContent  = lastSource.kind === 'file' ? 'Uploaded' : 'Loaded from URL'
-    el('errors').innerHTML = errCount ? render_errors_card(env.errors) : ''
+    update_errors_view()
     return env
+}
+
+// Refresh the parse-cell errors link and the errors card content.
+// Called both from write_stats (post-load) and after a rig check failure
+// adds to env.errors mid-session.
+function update_errors_view() {
+    let errCount = env.errors?.length || 0
+    el('stat-parse-sub').innerHTML = errCount
+        ? `<a href="" onclick="open_errors();return false">${errCount.toLocaleString()} errors</a>`
+        : ''
+    el('errors').innerHTML = errCount ? render_errors_card(env.errors) : ''
 }
 
 function render_errors_card(errs) {
@@ -1386,118 +1399,131 @@ function showhide(id) {
 }
 
 function show_abject_info(id) {
+    // Phase 1 — abject parsing (fast, synchronous). Always run so the
+    // Abject card stays current with the focus twist.
+    let twist, abject
     try {
-        el('rigcheck').innerHTML = ''
         let time = performance.now()
         if(!env.abject_atoms) {
             let uint = new Uint8Array(env.buff)
             env.abject_atoms = Atoms.fromBytes(uint)
         }
-        let twist = new Twist(env.abject_atoms, id)
-        let abject = Abject.fromTwist(twist)
-
-        env.info = { quantity: abject.quantity, displayPrecision: abject.displayPrecision
-                   , displayValue: DQ.quantityToDisplay(abject.quantity, abject.displayPrecision)
-                   , mintingInfo: abject.mintingInfo } //, root: env.abject.rootContext()}
-        let newtime = performance.now()
-        let abjectMs = (newtime-time).toFixed(1)
+        twist = new Twist(env.abject_atoms, id)
+        abject = Abject.fromTwist(twist)
+        env.info = {
+            quantity:         abject.quantity,
+            displayPrecision: abject.displayPrecision,
+            displayValue:     DQ.quantityToDisplay(abject.quantity, abject.displayPrecision),
+            mintingInfo:      abject.mintingInfo,
+        }
+        let abjectMs = (performance.now() - time).toFixed(1)
         el('abject').innerHTML = render_abject_card(env.info, abjectMs)
-        el('stat-parse-sub').textContent = `abject info ${abjectMs} ms`
-
-        abject.checkAllRigs().then(_ => {
-            el('rigcheck').innerHTML = `<span class="pass">PASS</span><span class="ms">${(performance.now()-newtime).toFixed(1)} ms</span>`
-        }).catch(_ => {
-
-            // //XXX(sfertman): BEGIN ~~ TODA INSTANT REALAY CERTIFIED HACK ~~
-
-            // --- Optimized TwinInterpreter (pre-computed topline set) ---
-            class TwinInterpreter extends Interpreter {
-                _getAllTethers() {
-                    if(this._tethers) return this._tethers
-
-                    let tethers = []
-                    let prevTwist = this.line.twist(this.line.latestTwist())
-                    let abj
-                    try {
-                        abj = Abject.fromTwist(prevTwist)
-                    } catch(_e) {}
-                    while(prevTwist) {
-                        if(prevTwist.getTetherHash()) {
-                            tethers.push(prevTwist.getTetherHash())
-                        }
-                        prevTwist = prevTwist.prev()
-                    }
-                    if(abj && abj instanceof DelegableActionable) {
-                        for(let delegate of abj.delegationChain()) {
-                            prevTwist = new Twist(abj.atoms, delegate.twistHash)
-                            while(prevTwist) {
-                                if(prevTwist.getTetherHash()) {
-                                    tethers.push(prevTwist.getTetherHash())
-                                }
-                                prevTwist = prevTwist.prev()
-                            }
-                        }
-                    }
-
-                    this._tethers = tethers
-                    return tethers
-                }
-
-                _buildToplineSet() {
-                    if(this._toplineSet) return this._toplineSet
-
-                    const s = new Set()
-
-                    const collectChain = (startHash) => {
-                        // Walk backwards
-                        let h = startHash
-                        while(h && !s.has(h.toString())) {
-                            s.add(h.toString())
-                            h = this.line.prev(h)
-                        }
-                        // Walk forwards
-                        h = this.line.successor(startHash)
-                        while(h && !s.has(h.toString())) {
-                            s.add(h.toString())
-                            h = this.line.successor(h)
-                        }
-                    }
-
-                    // Topline
-                    collectChain(this.topHash)
-
-                    // All tether chains
-                    for(const tether of this._getAllTethers()) {
-                        collectChain(tether)
-                    }
-
-                    this._toplineSet = s
-                    return s
-                }
-
-                isTopline(hash) {
-                    return this._buildToplineSet().has(hash.toString())
-                }
-            }
-            
-            DelegableActionable.prototype._constructInterpreter = function () {
-                return new TwinInterpreter(new Twist(this.atoms, this.twistHash), this.poptop());
-            };
-              
-            const ti = new TwinInterpreter(Line.fromTwist(twist), abject.poptop());
-            return ti.verifyTopline()
-                .then(_ => ti.verifyHitchLine(twist.getHash()))
-                .then(_ => el('rigcheck').innerHTML = `<span class="pass">RELAY</span><span class="ms">${(performance.now()-newtime).toFixed(1)} ms</span>`)
-            // //XXX(sfertman): END ~~ TODA INSTANT REALAY CERTIFIED HACK ~~
-        }).catch(e => {
-            el('rigcheck').innerHTML = `<span class="pass fail">FAIL</span><span class="ms">${(performance.now()-newtime).toFixed(1)} ms</span>`
-            console.error(e)
-        });
     } catch(e) {
         el('abject').innerHTML = ''
         el('rigcheck').innerHTML = `<span class="ms">Not an abject</span>`
-        el('stat-parse-sub').textContent = ''
+        return
     }
+
+    // Phase 2 — rig check (slow). Cache hit shows result instantly. Otherwise
+    // debounce so rapid navigation doesn't queue up a pile of checks, and tag
+    // each request with a generation so an in-flight check whose result is
+    // no longer wanted just discards itself at the next .then boundary.
+    let cached = env.rigResults?.[id]
+    if(cached) { el('rigcheck').innerHTML = cached.html; return }
+    el('rigcheck').innerHTML = '<span class="ms">checking…</span>'
+    if(_rigPending) { clearTimeout(_rigPending); _rigPending = 0 }
+    let myGen = ++_rigGen
+    _rigPending = setTimeout(() => {
+        _rigPending = 0
+        if(myGen !== _rigGen) return         // navigated away before timer fired
+        run_rig_check(id, myGen, abject, twist)
+    }, RIG_DEBOUNCE_MS)
+}
+
+function run_rig_check(id, gen, abject, twist) {
+    let t0 = performance.now()
+    let ms = () => (performance.now() - t0).toFixed(1)
+    let setRig = html => {
+        cache_rig_result(id, html)
+        if(gen === _rigGen) el('rigcheck').innerHTML = html
+    }
+    abject.checkAllRigs().then(_ => {
+        if(gen !== _rigGen) return
+        setRig(`<span class="pass">PASS</span><span class="ms">${ms()} ms</span>`)
+    }).catch(_ => {
+        if(gen !== _rigGen) return
+        // Optimised TwinInterpreter — pre-builds the topline hash set.
+        // //XXX(sfertman): BEGIN ~~ TODA INSTANT RELAY CERTIFIED HACK ~~
+        class TwinInterpreter extends Interpreter {
+            _getAllTethers() {
+                if(this._tethers) return this._tethers
+                let tethers = []
+                let prevTwist = this.line.twist(this.line.latestTwist())
+                let abj
+                try { abj = Abject.fromTwist(prevTwist) } catch(_e) {}
+                while(prevTwist) {
+                    if(prevTwist.getTetherHash()) tethers.push(prevTwist.getTetherHash())
+                    prevTwist = prevTwist.prev()
+                }
+                if(abj && abj instanceof DelegableActionable) {
+                    for(let delegate of abj.delegationChain()) {
+                        prevTwist = new Twist(abj.atoms, delegate.twistHash)
+                        while(prevTwist) {
+                            if(prevTwist.getTetherHash()) tethers.push(prevTwist.getTetherHash())
+                            prevTwist = prevTwist.prev()
+                        }
+                    }
+                }
+                this._tethers = tethers
+                return tethers
+            }
+            _buildToplineSet() {
+                if(this._toplineSet) return this._toplineSet
+                const s = new Set()
+                const collectChain = (startHash) => {
+                    let h = startHash
+                    while(h && !s.has(h.toString())) { s.add(h.toString()); h = this.line.prev(h) }
+                    h = this.line.successor(startHash)
+                    while(h && !s.has(h.toString())) { s.add(h.toString()); h = this.line.successor(h) }
+                }
+                collectChain(this.topHash)
+                for(const tether of this._getAllTethers()) collectChain(tether)
+                this._toplineSet = s
+                return s
+            }
+            isTopline(hash) { return this._buildToplineSet().has(hash.toString()) }
+        }
+        DelegableActionable.prototype._constructInterpreter = function () {
+            return new TwinInterpreter(new Twist(this.atoms, this.twistHash), this.poptop())
+        }
+        const ti = new TwinInterpreter(Line.fromTwist(twist), abject.poptop())
+        return ti.verifyTopline()
+            .then(_ => { if(gen !== _rigGen) throw new Error('superseded'); return ti.verifyHitchLine(twist.getHash()) })
+            .then(_ => {
+                if(gen !== _rigGen) return
+                setRig(`<span class="pass">RELAY</span><span class="ms">${ms()} ms</span>`)
+            })
+        // //XXX(sfertman): END ~~ TODA INSTANT RELAY CERTIFIED HACK ~~
+    }).catch(e => {
+        if(gen !== _rigGen) return
+        if(e?.message === 'superseded') return
+        setRig(`<span class="pass fail">FAIL</span><span class="ms">${ms()} ms</span>`)
+        record_rig_error(id, e)
+        console.error(e)
+    })
+}
+
+function cache_rig_result(id, html) {
+    if(!env.rigResults) env.rigResults = {}
+    env.rigResults[id] = { html }
+}
+
+function record_rig_error(id, err) {
+    if(!env.errors) env.errors = []
+    if(env.errors.some(e => e.twistHash === id && e.source === 'rig')) return  // dedupe
+    let msg = err?.message || String(err)
+    env.errors.push({ twistHash: id, source: 'rig', message: `Rig check failed in "${id}": ${msg}` })
+    update_errors_view()
 }
 
 const SVG_EXPORT_STYLES = `

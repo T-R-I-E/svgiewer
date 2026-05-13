@@ -175,7 +175,6 @@ input.field:focus { background: var(--hit-bg-focus); }
 .toggles span { cursor: pointer; }
 .toggles .on { border-bottom: var(--rule); }
 .toggles .locked { opacity: .3; cursor: not-allowed; }
-.toggles .locked.on { border-bottom-color: transparent; }
 
 /* ─────────── search hits strip ─────────── */
 .hits {
