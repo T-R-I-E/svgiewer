@@ -205,6 +205,14 @@ function get_hitched(env) {
             if(!meet || meet.shape != TWIST) return 0
             if(pair[0].hash)                 // HACK: doesn't check post
                 return t.outies.push([meet, 'post'])
+            // key unknown → we'd assume a hoist (meet + previous fast twist as
+            // lead). But a post at the start of a line looks identical: if t is
+            // one of its line's first two fast twists and its tether is (or is
+            // colinear with) the value, it's really a post. The colinear walk
+            // is last so it only runs once the cheaper checks have passed.
+            if(is_early_fast(t) &&
+               (t.teth === meet || line_root(t.teth) === line_root(meet)))
+                return t.outies.push([meet, 'post'])
             let lead = fastprev(meet)
             if(!lead) return 0
             t.outies.push([lead, 'lead'])
@@ -856,6 +864,24 @@ function fastprev(t) {
     }
     return 0
     // return fastprev(t.prev)
+}
+
+// A "fast" twist has a tether. is_early_fast is true when t is fast and is one
+// of the first two fast twists on its line (≤1 fast twist precedes it via prev).
+function is_early_fast(t) {
+    if(!t.teth) return false
+    let seen = 0
+    for(let p = t.prev; p; p = p.prev)
+        if(p.teth && ++seen > 1) return false
+    return true
+}
+
+// walk prev to the line's root — the same value get_in_line later stores as
+// .first, but computed here since get_hitched runs before it. two twists are
+// colinear when their roots match.
+function line_root(t) {
+    while(t.prev) t = t.prev
+    return t
 }
 
 function get(t, label) {
