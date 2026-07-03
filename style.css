@@ -353,6 +353,13 @@ input.field:focus { background: var(--hit-bg-focus); }
     border-bottom: 1px solid currentColor;
 }
 .kv > .v a:hover { color: var(--magenta); }
+.copy-btn {
+    margin-left: 6px; padding: 0 3px; border: 0; background: none;
+    color: inherit; opacity: .35; cursor: pointer; font-size: 11px;
+    line-height: 1; vertical-align: baseline;
+}
+.copy-btn:hover { opacity: .9; color: var(--magenta); }
+.copy-btn.copied { opacity: 1; color: var(--lime); }
 .v.teal  { color: var(--teal); }
 .v.amber { color: var(--amber); }
 .v.lime  { color: var(--lime); }

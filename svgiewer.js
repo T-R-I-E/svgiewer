@@ -1103,9 +1103,22 @@ function hash_link(h, cls) {
     if(!h) return '—'
     let label = display_hash(h)
     let t = env.index?.[h]
-    if(t?.shape === TWIST)
-        return `<a class="${cls||''}" href="" onclick="select_node('${h}');return false" onmouseover="highlight_node('${h}')">${label}</a>`
-    return `<span class="${cls||''}">${label}</span>`
+    let inner = t?.shape === TWIST
+        ? `<a class="${cls||''}" href="" onclick="select_node('${h}');return false" onmouseover="highlight_node('${h}')">${label}</a>`
+        : `<span class="${cls||''}">${label}</span>`
+    return inner + copy_btn(h)
+}
+
+function copy_btn(h) {
+    return `<button class="copy-btn" title="Copy full hash" onclick="copy_hash('${h}',this);return false">⧉</button>`
+}
+
+function copy_hash(h, btn) {
+    navigator.clipboard?.writeText(h)
+    if(!btn) return
+    btn.textContent = '✓'
+    btn.classList.add('copied')
+    setTimeout(() => { btn.textContent = '⧉'; btn.classList.remove('copied') }, 900)
 }
 
 function kv_row(k, vHtml, vCls) {
@@ -1725,6 +1738,7 @@ window.toggle_collapse = toggle_collapse
 window.expand_segment = expand_segment
 window.toggle_card = toggle_card
 window.toggle_mode = toggle_mode
+window.copy_hash = copy_hash
 
 // aside open/close
 el('closeAside')?.addEventListener('click', () => el('app').dataset.aside = 'closed')
