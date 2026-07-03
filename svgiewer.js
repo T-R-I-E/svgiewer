@@ -418,7 +418,25 @@ function set_limits(env) {
 // ─── canvas rendering ───
 const EDGE_ORDER = ['prev', 'teth', 'lead', 'meet', 'post', 'cargo']
 const TAU = Math.PI * 2
+const NULLPREV_LEN = 30      // stub length behind a null-prev twist, world units
+const NULLPREV_R = 2.8       // half-arm of the × that terminates the stub
 let _paths = null            // cached Path2D objects, rebuilt on layout change
+
+// A twist whose prev is the null hash (a line's genesis), as opposed to a prev
+// we just don't have in this bag (t.body.prevhash — a dangling reference).
+function is_null_prev(t) {
+    return !t.prev && !t.body?.prevhash
+}
+
+// Inert <path> pair: a stub trailing back from a twist to a little × where the
+// (nonexistent) prev circle would be. Connector is "prev" grey, × is the darker
+// "nullprev-x"; the svg stylesheet gives paths pointer-events:none so it can't
+// be selected.
+function nullprev_svg(cx, cy) {
+    let ex = cx - NULLPREV_LEN, r = NULLPREV_R
+    return `<path d="M ${cx} ${cy} L ${ex} ${cy}" class="prev"/>`
+         + `<path d="M ${ex-r} ${cy-r} L ${ex+r} ${cy+r} M ${ex-r} ${cy+r} L ${ex+r} ${cy-r}" class="nullprev-x"/>`
+}
 
 function read_palette() {
     let cs = getComputedStyle(document.documentElement)
@@ -428,6 +446,7 @@ function read_palette() {
         paper:         g('--paper')           || '#f3efe6',
         defStroke:     g('--stroke-default')  || '#15110b',
         prev:          g('--stroke-prev')     || '#999',
+        nullprev:      g('--stroke-nullprev') || '#4d4d4d',
         teth:          g('--stroke-teth')     || '#f9f',
         lead:          g('--stroke-lead')     || 'rgb(61,255,51)',
         meet:          g('--stroke-meet')     || '#86f',
@@ -465,6 +484,7 @@ function build_paths() {
         segConn: new Path2D(),       // straight connector line per collapsed segment
         nodesByColor: new Map(),     // {color: Path2D of all that color's circles}
         segMarkers: [],              // {x, y, color, count} list for bubble + text
+        nullPrevs: [],               // {x, y} of twists whose prev is null
     }
     for(let type of EDGE_ORDER) {
         paths.edges[type] = [new Path2D(), new Path2D()]
@@ -528,6 +548,7 @@ function build_paths() {
         if(!p) { p = new Path2D(); paths.nodesByColor.set(c, p) }
         p.moveTo(t.cx + 5, t.cy)
         p.arc(t.cx, t.cy, 5, 0, TAU)
+        if(is_null_prev(t)) paths.nullPrevs.push({ x: t.cx, y: t.cy })
     }
 
     _paths = paths
@@ -616,6 +637,26 @@ function render_canvas(env) {
         ctx.strokeStyle = pal.prev
         ctx.lineWidth = invS
         ctx.stroke(_paths.segConn)
+
+        // 2b) null-prev markers: a grey stub trailing back to a darker × behind
+        //     each null-prev twist, drawn under the nodes so the circle sits on
+        //     top. Two passes so the stub and × can differ in colour.
+        if(_paths.nullPrevs.length) {
+            ctx.lineWidth = invS
+            ctx.strokeStyle = pal.prev
+            ctx.beginPath()
+            for(let m of _paths.nullPrevs)
+                { ctx.moveTo(m.x, m.y); ctx.lineTo(m.x - NULLPREV_LEN, m.y) }
+            ctx.stroke()
+            ctx.strokeStyle = pal.nullprev
+            ctx.beginPath()
+            for(let m of _paths.nullPrevs) {
+                let ex = m.x - NULLPREV_LEN, r = NULLPREV_R
+                ctx.moveTo(ex - r, m.y - r); ctx.lineTo(ex + r, m.y + r)
+                ctx.moveTo(ex - r, m.y + r); ctx.lineTo(ex + r, m.y - r)
+            }
+            ctx.stroke()
+        }
 
         // 3) Fill+stroke node circles, one batched path per colour
         ctx.lineWidth = invS
@@ -1380,13 +1421,14 @@ function set_svg_transform() {
 // (one element per twist + edge), but high-fidelity at any zoom.
 function render_svg(env) {
     if(!env || !env.shapes) return
-    let svgs = '', edgestr = '', edges = []
+    let svgs = '', edgestr = '', decostr = '', edges = []
     let twists = env.shapes[TWIST] || []
     for(let t of twists) {
         if(!t.cx) continue
         let seg = t.segment
         if(seg?.collapsed && t !== seg.first && t !== seg.last) continue
         svgs += `<circle cx="${t.cx}" cy="${t.cy}" r="5" fill="#${t.colour}" id="${t.hash}"/>`
+        if(is_null_prev(t)) decostr += nullprev_svg(t.cx, t.cy)
         for(let o of t.outies) edges.push([t, o[0], o[1]])
     }
     edges.sort((a, b) => EDGE_ORDER.indexOf(a[2]) - EDGE_ORDER.indexOf(b[2]))
@@ -1412,7 +1454,7 @@ function render_svg(env) {
         svgs += `<circle cx="${mx}" cy="${my}" r="8" fill="#${f.colour}" id="${seg.id}" opacity="0.6"/>`
         svgs += `<text x="${mx}" y="${my+3}" text-anchor="middle" font-size="7" fill="#000" pointer-events="none">${seg.twists.length}</text>`
     }
-    svgEl.innerHTML = `<g id="gtag" style="will-change:transform">${edgestr}${svgs}</g>`
+    svgEl.innerHTML = `<g id="gtag" style="will-change:transform">${edgestr}${decostr}${svgs}</g>`
     set_svg_transform()
     sync_svg_classes()
     if(_rainbow) apply_rainbow_state()       // rainbow classes are wiped by innerHTML; reapply
@@ -1610,6 +1652,7 @@ const SVG_EXPORT_STYLES = `
     circle { stroke: #15110b; stroke-width: 1; }
     path { fill: none; }
     .prev  { stroke: #999; stroke-linecap: butt; }
+    .nullprev-x { stroke: #4d4d4d; stroke-linecap: butt; }
     .teth  { stroke: #f9f; stroke-linecap: butt; }
     .lead  { stroke: rgb(61,255,51); stroke-linecap: butt; }
     .meet  { stroke: #86f; stroke-linecap: butt; }
@@ -1641,7 +1684,7 @@ function download_svg() {
 // Build an SVG string from the current env data (replaces the old
 // DOM-scraping export — canvas has no DOM to read).
 function build_export_svg() {
-    let svgs = '', edgestr = ''
+    let svgs = '', edgestr = '', decostr = ''
     let twists = env.shapes[TWIST] || []
     let edges = []
     for(let t of twists) {
@@ -1649,6 +1692,7 @@ function build_export_svg() {
         let seg = t.segment
         if(seg?.collapsed && t !== seg.first && t !== seg.last) continue
         svgs += `<circle cx="${t.cx}" cy="${t.cy}" r="5" fill="#${t.colour}" id="${t.hash}"/>`
+        if(is_null_prev(t)) decostr += nullprev_svg(t.cx, t.cy)
         for(let [target, type] of t.outies) edges.push([t, target, type])
     }
     edges.sort((a, b) => EDGE_ORDER.indexOf(a[2]) - EDGE_ORDER.indexOf(b[2]))
@@ -1674,7 +1718,7 @@ function build_export_svg() {
         svgs += `<circle cx="${mx}" cy="${my}" r="8" fill="#${f.colour}" id="${seg.id}" opacity="0.6"/>`
         svgs += `<text x="${mx}" y="${my + 3}" text-anchor="middle" font-size="7" fill="#000">${seg.twists.length}</text>`
     }
-    return edgestr + svgs
+    return edgestr + decostr + svgs
 }
 
 function rainbowsparkles() {

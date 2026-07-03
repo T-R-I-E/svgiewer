@@ -40,6 +40,7 @@
        follows --ink so the circle stroke contrasts the paper */
     --stroke-default: var(--ink);
     --stroke-prev: #999;
+    --stroke-nullprev: #4d4d4d;  /* the × marking a null prev — 50% darker than prev */
     --stroke-teth: #f9f;
     --stroke-lead: rgb(61, 255, 51);
     --stroke-meet: #86f;
@@ -439,6 +440,7 @@ input.field:focus { background: var(--hit-bg-focus); }
     pointer-events: none;
 }
 #viewport-svg .prev { stroke: var(--stroke-prev); stroke-linecap: butt; }
+#viewport-svg .nullprev-x { stroke: var(--stroke-nullprev); stroke-linecap: butt; }
 #viewport-svg .teth { stroke: var(--stroke-teth); stroke-linecap: butt; }
 #viewport-svg .lead { stroke: var(--stroke-lead); stroke-linecap: butt; }
 #viewport-svg .meet { stroke: var(--stroke-meet); stroke-linecap: butt; }
