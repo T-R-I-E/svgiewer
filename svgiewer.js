@@ -1243,11 +1243,23 @@ function render_body_card(b) {
     return card_open('body', 'Body') + body + card_close
 }
 
+const LONG_TEXT_CHARS = 120     // string values longer than this get a read-more clamp
+
+// Wrap already-built inner HTML in a ~3-line clamp with a more/less toggle when
+// `long`; otherwise return it unchanged. The toggle sits outside the clamped
+// body so it stays visible; CSS swaps its "more"/"less" label on .open.
+function readmore(inner, long) {
+    if(!long) return inner
+    return `<span class="blob"><span class="blob-body">${inner}</span>`
+         + `<button class="blob-more" onclick="toggle_blob(this)"></button></span>`
+}
+
 // Render the value side of a trie pair / list item, mirroring the original
 // strsmasher's resolution order: English alias by hash, then ARB literal
 // unwrap, then a short (linkable when it's a known twist) hash, then a
 // stringified fallback. `x` is an atom object, a raw hash string, or 0.
-function smash_pair_side(x) {
+// `asValue` opts long ARB strings into a read-more clamp (keys stay inline).
+function smash_pair_side(x, asValue) {
     if(x === 0 || x === null || x === undefined) return '<span class="literal">0</span>'
     let h = (typeof x === 'string') ? x : x.hash
     if(h) {
@@ -1255,9 +1267,9 @@ function smash_pair_side(x) {
         if(alias) return `<span class="alias">${alias}</span>`
         if(x?.shape === ARB) {
             let raw = arb_to_twever(x)
-            return typeof raw === 'string'
-                ? `<span class="literal">"${raw}"</span>`
-                : `<span class="literal">${raw}</span>`
+            if(typeof raw !== 'string') return `<span class="literal">${raw}</span>`
+            let lit = `<span class="literal">"${raw}"</span>`
+            return asValue ? readmore(lit, raw.length > LONG_TEXT_CHARS) : lit
         }
         return hash_link(h)
     }
@@ -1270,11 +1282,11 @@ function render_atom_subsection(label, atom) {
     if(!atom) return ''
     let rows = ''
     if(atom.pairs) {
-        atom.pairs.forEach(([k, v]) => rows += kv_row(smash_pair_side(k), smash_pair_side(v)))
+        atom.pairs.forEach(([k, v]) => rows += kv_row(smash_pair_side(k), smash_pair_side(v, true)))
     } else if(atom.list) {
-        atom.list.forEach((item, i) => rows += kv_row(`[${i}]`, smash_pair_side(item)))
+        atom.list.forEach((item, i) => rows += kv_row(`[${i}]`, smash_pair_side(item, true)))
     } else {
-        rows = kv_row('value', smash_pair_side(atom))
+        rows = kv_row('value', smash_pair_side(atom, true))
     }
     return `<div class="sub-section">
         <div class="sub-head">${label}<span class="sub-meta">shape ${atom.shape} · ${short(atom.hash) || ''}</span></div>
@@ -1293,7 +1305,7 @@ function render_pair_entry(k, v) {
             <div class="trie-body">${render_trie_content(v)}</div>
         </div>`
     }
-    return `<div class="kv"><span class="k">${kHtml}</span><span class="v">${smash_pair_side(v)}</span></div>`
+    return `<div class="kv"><span class="k">${kHtml}</span><span class="v">${smash_pair_side(v, true)}</span></div>`
 }
 
 function render_trie_body(atom) {
@@ -1317,7 +1329,9 @@ function render_cargo_card(c) {
         body += render_trie_body(c)
     } else if(c.shape === ARB) {
         let raw = arb_to_twever(c)
-        body += `<div class="kv"><span class="k">literal</span><span class="v"><span class="literal">${typeof raw === 'string' ? `"${raw}"` : raw}</span></span></div>`
+        let lit = `<span class="literal">${typeof raw === 'string' ? `"${raw}"` : raw}</span>`
+        let long = typeof raw === 'string' && raw.length > LONG_TEXT_CHARS
+        body += `<div class="kv"><span class="k">literal</span><span class="v">${readmore(lit, long)}</span></div>`
     } else if(c.shape === TWIST) {
         body += `<div class="kv"><span class="k">twist</span><span class="v">${hash_link(c.hash)}</span></div>`
     }
@@ -1326,8 +1340,10 @@ function render_cargo_card(c) {
 
 function render_abject_card(info, ms) {
     if(!info) return ''
+    let mint = info.mintingInfo ? JSON.stringify(info.mintingInfo, null, 1) : ''
     let mintHtml = info.mintingInfo
-        ? `<pre style="margin:0;font-size:11px;white-space:pre-wrap;word-break:break-all">${JSON.stringify(info.mintingInfo, null, 1)}</pre>`
+        ? readmore(`<pre style="margin:0;font-size:11px;white-space:pre-wrap;word-break:break-all">${mint}</pre>`,
+                   mint.split('\n').length > 4 || mint.length > LONG_TEXT_CHARS)
         : '—'
     let body = `<div class="meta-line">generated in ${ms} ms</div>`
         + kv_row('quantity',  info.quantity ?? '—')
@@ -1338,6 +1354,8 @@ function render_abject_card(info, ms) {
 }
 
 function toggle_card(card) { card.classList.toggle('collapsed') }
+
+function toggle_blob(btn) { btn.parentElement.classList.toggle('open') }
 
 function strsmasher(k, v) {
     if(['bin', 'x', 'y', 'cx', 'cy', 'colour', 'cargooo'].includes(k))
@@ -1809,6 +1827,7 @@ window.expand_segment = expand_segment
 window.toggle_card = toggle_card
 window.toggle_mode = toggle_mode
 window.copy_hash = copy_hash
+window.toggle_blob = toggle_blob
 
 // aside open/close
 el('closeAside')?.addEventListener('click', () => el('app').dataset.aside = 'closed')

@@ -369,6 +369,20 @@ input.field:focus { background: var(--hit-bg-focus); }
 .k .alias   { color: var(--teal); font-weight: 600; }
 .k .literal { color: var(--amber); }
 
+/* long text blobs (ARB string literals, minting JSON) clamp to ~3 lines with a
+   more/less toggle; the label swaps via ::after when .open is set */
+.blob { display: block; }
+.blob-body { max-height: 4.6em; overflow: hidden; }
+.blob.open .blob-body { max-height: none; }
+.blob-more {
+    display: block; margin-top: 3px; padding: 0; border: 0; background: none;
+    color: var(--magenta); cursor: pointer; font-family: var(--mono);
+    font-size: 11px; opacity: .8;
+}
+.blob-more:hover { opacity: 1; }
+.blob-more::after { content: "more ▾"; }
+.blob.open .blob-more::after { content: "less ▴"; }
+
 /* nested atom block inside a card (rigtrie, cargo sub-tries) */
 .card .sub-section {
     margin-top: 14px;
